@@ -66,7 +66,7 @@ class ONNModel(ONNBaseModel):
 ## Features
 - Support pytorch training MZI-based ONNs. Support MZI-based Linear, Conv2d, BlockLinear, and BlockConv2d. Support `weight`, `usv`, `phase` modes and their conversion.
 - Support phase **quantization** and **non-ideality injection**, including phase shifter gamma error, phase variations, and crosstalk.
-- **CUDA-accelerated batched** MZI array decomposition and reconstruction for ultra-fast real/complex matrix mapping, Francis (Triangle), Reck (Triangle), Clements (Rectangle) styles are supported.
+- **CUDA-accelerated batched** MZI array decomposition and reconstruction for ultra-fast real/complex matrix mapping. Francis (Triangle), Reck (Triangle), Clements (Rectangle) styles are supported.
 
 ## TODOs
 - [ ] Support micro-ring resonator (MRR)-based ONN. (Tait+, [SciRep](https://doi.org/10.1038/s41598-017-07754-z) 2017)
@@ -88,10 +88,10 @@ class ONNModel(ONNBaseModel):
 | File      | Description |
 | ----------- | ----------- |
 | torchonn/ | Library source files with model, layer, and device definition |
-| torchonn/op | CUDA-accelerated operators |
+| torchonn/op | Basic operators and CUDA-accelerated operators |
 | torchonn/layers      | Optical device-implemented layers |
-| torchonn/models   | Basic ONN model templete |
-| torchonn/devices   | Optical device paraemters and configurations |
+| torchonn/models   | Base ONN model templete |
+| torchonn/devices   | Optical device parameters and configurations |
 | examples/   | ONN model building and training examples |
 | examples/configs| YAML-based configuration files|
 | examples/core| ONN model definition and training utility |
@@ -100,13 +100,21 @@ class ONNModel(ONNBaseModel):
 # More Examples
 The `examples/` folder contains more examples to train the ONN
 models.
+
+An example optical convolutional neural network `MZI_CLASS_CNN` is defined in `examples/core/models/mzi_cnn.py`.
+
+Training facilities, e.g., optimizer, critetion, lr_scheduler, models are built in `examples/core/builder.py`.
+The training and validation logic is defined in `examples/train.py`.
+All training hyperparameters are hierarchically defined in the yaml configuration file `examples/configs/mnist/mzi_onn/train.yml` (The final config is the union of all `default.yml` from higher-level directories and this specific `train.yml` ).
+
+By running the following commands,
 ```python
 # train the example MZI-based CNN model with 2 64-channel Conv layers and 1 Linear layer
 # training will happend in usv mode to optimize U, Sigma, and V*
 # projected gradient descent will be applied to guarantee the orthogonality of U and V*
 # the final step will convert unitary matrices into MZI phases and evaluate in the phase mode
 cd examples
-python3 train.py configs/mnist/mzi_cnn/train.yml
+python3 train.py configs/mnist/mzi_cnn/train.yml # [followed by any command-line arguments that override the values in config file, e.g., --optimizer.lr=0.001]
 ```
 
 Detailed documentations coming soon.

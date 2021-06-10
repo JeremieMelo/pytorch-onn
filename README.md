@@ -66,7 +66,7 @@ class ONNModel(ONNBaseModel):
 ## Features
 - Support pytorch training MZI-based ONNs. Support MZI-based Linear, Conv2d, BlockLinear, and BlockConv2d. Support `weight`, `usv`, `phase` modes and their conversion.
 - Support phase **quantization** and **non-ideality injection**, including phase shifter gamma error, phase variations, and crosstalk.
-- **CUDA-accelerated batched** MZI array decomposition and reconstruction for ultra-fast real/complex matrix mapping. Francis (Triangle), Reck (Triangle), Clements (Rectangle) styles are supported.
+- **CUDA-accelerated batched** MZI array decomposition and reconstruction for ultra-fast real/complex matrix mapping, which achieves 10-50X speedup over CPU-based unitary group parametrization. Francis (Triangle), Reck (Triangle), Clements (Rectangle) styles MZI meshes are supported.
 
 ## TODOs
 - [ ] Support micro-ring resonator (MRR)-based ONN. (Tait+, [SciRep](https://doi.org/10.1038/s41598-017-07754-z) 2017)

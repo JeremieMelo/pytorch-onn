@@ -3,15 +3,48 @@ A PyTorch-centric Optical Neural Network Library
 
 [![MIT License](https://img.shields.io/apm/l/atomic-design-ui.svg?)](https://github.com/JeremieMelo/pytorch-onn/blob/release/LICENSE)
 
+<!-- toc -->
+
+- [News](#news)
+- [Installation](#installation)
+  - [From Source](#from-source)
+    - [Dependencies](#dependencies)
+    - [Get the PyTorch-ONN Source](#get-the-pytorch-onn-source)
+    - [Install PyTorch-ONN](#install-pytorch-onn)
+- [Usage](#usage)
+- [Features](#features)
+- [TODOs](#todos)
+- [Files](#files)
+- [More Examples](#more-examples)
+
+<!-- tocstop -->
 ## News
 - v0.0.1 available. Feedbacks are highly welcomed!
 
 ## Installation
+
+### From Source
+
+#### Dependencies
+- Python >= 3.6
+- PyTorch >= 1.8.0
+- Tensorflow-gpu >= 2.5.0
+- pyutils >= 0.0.1
+- Others are listed in requirements.txt
+- GPU model training requires NVIDIA GPUs and compatible CUDA
+
+#### Get the PyTorch-ONN Source
 ```bash
 git clone https://github.com/JeremieMelo/pytorch-onn.git
+```
+
+#### Install PyTorch-ONN
+```bash
 cd pytorch-onn
 python3 setup.py install --user clean
+```
 or
+```bash
 ./setup.sh
 ```
 
@@ -66,7 +99,9 @@ class ONNModel(ONNBaseModel):
 ## Features
 - Support pytorch training MZI-based ONNs. Support MZI-based Linear, Conv2d, BlockLinear, and BlockConv2d. Support `weight`, `usv`, `phase` modes and their conversion.
 - Support phase **quantization** and **non-ideality injection**, including phase shifter gamma error, phase variations, and crosstalk.
-- **CUDA-accelerated batched** MZI array decomposition and reconstruction for ultra-fast real/complex matrix mapping, which achieves 10-50X speedup over CPU-based unitary group parametrization. Francis (Triangle), Reck (Triangle), Clements (Rectangle) styles MZI meshes are supported.
+- **CUDA-accelerated batched** MZI array decomposition and reconstruction for ultra-fast real/complex matrix mapping, which achieves 10-50X speedup over CPU-based unitary group parametrization. Francis (Triangle), Reck (Triangle), Clements (Rectangle) styles MZI meshes are supported. To see the efficiency of our CUDA implementation, try the following unittest command at root directory,
+ `python3 unitest/test_op.py`
+ , and check the runtime comparison.
 
 ## TODOs
 - [ ] Support micro-ring resonator (MRR)-based ONN. (Tait+, [SciRep](https://doi.org/10.1038/s41598-017-07754-z) 2017)
@@ -76,25 +111,17 @@ class ONNModel(ONNBaseModel):
 - [ ] Support ONN on-chip learning via zeroth-order optimization. (Gu+, [FLOPS](https://doi.org/10.1109/DAC18072.2020.9218593) DAC 2020) (Gu+, [MixedTrain](https://arxiv.org/abs/2012.11148) AAAI 2021)
 
 
-## Dependencies
-- Python >= 3.6
-- PyTorch >= 1.8.0
-- Tensorflow-gpu >= 2.5.0
-- pyutils >= 0.0.1
-- Others are listed in requirements.txt
-- GPU model training requires NVIDIA GPUs and compatible CUDA
-
 ## Files
-| File      | Description |
-| ----------- | ----------- |
-| torchonn/ | Library source files with model, layer, and device definition |
-| torchonn/op | Basic operators and CUDA-accelerated operators |
-| torchonn/layers      | Optical device-implemented layers |
-| torchonn/models   | Base ONN model templete |
-| torchonn/devices   | Optical device parameters and configurations |
-| examples/   | ONN model building and training examples |
-| examples/configs| YAML-based configuration files|
-| examples/core| ONN model definition and training utility |
+| File             | Description |
+| ---------------- | ----------- |
+| torchonn/        | Library source files with model, layer, and device definition |
+| torchonn/op      | Basic operators and CUDA-accelerated operators |
+| torchonn/layers  | Optical device-implemented layers |
+| torchonn/models  | Base ONN model templete |
+| torchonn/devices | Optical device parameters and configurations |
+| examples/        | ONN model building and training examples |
+| examples/configs | YAML-based configuration files|
+| examples/core    | ONN model definition and training utility |
 | example/train.py | training script|
 
 # More Examples

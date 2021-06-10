@@ -1,0 +1,54 @@
+criterion:
+  name: ce
+
+optimizer:
+  name: sam
+  lr: 0.002
+  weight_decay: 0.0
+  adaptive: True
+  rho: 0.5
+  base_optimizer:
+    name: sgd
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.00001
+
+scheduler:
+  name: cosine
+  lr_gamma: 0.99
+  lr_min: 0
+
+run:
+  experiment: mnist_cnn_train
+  n_epochs: 200
+  batch_size: 32
+
+quantize:
+  weight_bit: 32
+  input_bit: 32
+
+noise:
+  random_state: 42
+
+checkpoint:
+  save_best_model_k: 1
+  checkpoint_dir: "mnist/mzi_cnn/train"
+  model_comment: ""
+  resume: 0
+  restore_checkpoint: ""
+
+model:
+  name: "MZI_CLASS_CNN"
+  mode: "usv"
+  kernel_list: [64, 64]
+  kernel_size_list: [3, 3]
+  hidden_list: []
+  block_list: [8, 8, 8]
+  stride_list: [1, 1]
+  padding_list: [1, 1]
+  dilation_list: [1, 1]
+  pool_out_size: 5
+  decompose_alg: clements
+
+debug:
+  verbose: 1

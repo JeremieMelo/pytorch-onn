@@ -1,0 +1,66 @@
+dataset:
+  name: mnist
+  root: "./data"
+  num_workers: 2
+  img_height: 28
+  img_width: 28
+  in_channels: 1
+  num_classes: 10
+  transform: basic
+  shuffle: 0
+
+criterion:
+  name: ce
+
+optimizer:
+  name: adamw
+  lr: 0.002
+  weight_decay: 0.0
+
+scheduler:
+  name: cosine
+  lr_gamma: 0.99
+  lr_min: 0
+
+run:
+  experiment: mnist_cnn_train
+  n_epochs: 200
+  batch_size: 32
+  use_cuda: 1
+  gpu_id: 0
+  deterministic: 1
+  random_state: 42
+  log_interval: 200
+
+quantize:
+  weight_bit: 32
+  input_bit: 32
+
+noise:
+  phase_noise_std: 0
+  gamma_noise_std: 0
+  crosstalk_factor: 0
+  random_state: 42
+
+checkpoint:
+  save_best_model_k: 3
+  checkpoint_dir: "mnist/mzi_cnn/train"
+  model_comment: ""
+  resume: 0
+  restore_checkpoint: ""
+
+model:
+  name: "MZI_CLASS_CNN"
+  mode: "usv"
+  kernel_list: [64, 64]
+  kernel_size_list: [3, 3]
+  hidden_list: []
+  block_list: [8, 8, 8]
+  stride_list: [1, 1]
+  padding_list: [1, 1]
+  dilation_list: [1, 1]
+  pool_out_size: 5
+  decompose_alg: reck
+
+debug:
+  verbose: 1

@@ -150,3 +150,7 @@ Detailed documentations coming soon.
 
 ## Contact
 Jiaqi Gu (jqgu@utexas.edu)
+
+
+# Related Projects using PyTorch-ONN Library
+> **Scalable ONN on-chip learning**: See [L2ight](https://github.com/JeremieMelo/L2ight), NeurIPS 2021.

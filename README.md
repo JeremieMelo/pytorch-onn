@@ -16,6 +16,7 @@ A PyTorch-centric Optical Neural Network Library
 - [TODOs](#todos)
 - [Files](#files)
 - [More Examples](#more-examples)
+- [Related Projects](#related-projects-using-pytorch-onn-library)
 
 <!-- tocstop -->
 ## News

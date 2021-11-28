@@ -78,7 +78,7 @@ class MZIConv2d(ONNBaseLayer):
         groups: int = 1,
         bias: bool = True,
         mode: str = "weight",
-        decompose_alg="clements",
+        decompose_alg: str = "clements",
         photodetect: bool = True,
         device: Device = torch.device("cpu"),
     ):

@@ -6,12 +6,12 @@ LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-08 20:49:14
 """
 import os
+from distutils import log
+from distutils.dir_util import remove_tree
 
 import torch
 import torch.cuda
-from setuptools import find_packages, setup, Command
-from distutils.dir_util import remove_tree
-from distutils import log
+from setuptools import Command, find_packages, setup
 from torch.utils.cpp_extension import CUDA_HOME, BuildExtension, CppExtension, CUDAExtension
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -84,7 +84,7 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
 
 setup(
     name="torchonn",
-    version="0.0.1",
+    version="0.0.2",
     description="Pytorch-centric Optical Neural Network Library",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -99,7 +99,7 @@ setup(
         "setuptools>=52.0.0",
         "torch>=1.8.0",
         "pyutils>=0.0.1",
-        "torchonn>=0.0.1",
+        "torchonn>=0.0.2",
         "matplotlib>=3.3.4",
         "svglib>=1.1.0",
         "scipy>=1.5.4",

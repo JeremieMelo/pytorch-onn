@@ -607,7 +607,7 @@ def usv(U, S, V):
 
 
 class PhaseQuantizer(torch.nn.Module):
-    __mode_list__ = {"rectangle", "triangle", "diagonal"}
+    __mode_list__ = {"rectangle", "triangle", "diagonal", "butterfly"}
 
     def __init__(
         self,
@@ -624,8 +624,13 @@ class PhaseQuantizer(torch.nn.Module):
         """2021/04/01: Uniform phase-space quantization. Support gamma noise and thermal crosstalk simulation
         Args:
             bit (int): bitwidth
-            phase_onise_std (float, optional): std dev of Gaussian phase noise. Defaults to 0.
+            v_pi (float): Voltage corresponding to pi phase shift
+            v_max (float): maximum voltage
+            gamma_noise_std (float, optional): std dev of Gaussian phase noise on the gamma coefficient. Defaults to 0.
+            crosstalk_factor (float): Crosstalk coefficient. Defaults to 0.
+            crosstalk_filter_size (int): Conv kernel size used in crosstalk simulation. Defaults to 5.
             random_state (None or int, optional): random_state for noise injection. Defaults to None.
+            mode (str): Mesh structure from (rectangle, triangle, diagonal)
             device (torch.Device, optional): torch.Device. Defaults to torch.device("cuda").
         """
         super().__init__()
@@ -638,7 +643,7 @@ class PhaseQuantizer(torch.nn.Module):
         self.crosstalk_filter_size = crosstalk_filter_size
         self.random_state = random_state
         self.mode = mode
-        assert mode in self.__mode_list__, logger.error(f"Only support {self.__mode_list__}, but got {mode}.")
+        assert mode in self.__mode_list__, logger.error(f"Only support mode in {self.__mode_list__}, but got mode: {mode}.")
         self.device = device
 
         self.crosstal_simulator = ThermalCrosstalkSimulator(
@@ -670,7 +675,7 @@ class PhaseQuantizer(torch.nn.Module):
     def forward(self, x):
         x = x % (2 * np.pi)
         if self.bit < 16:
-            if self.mode in {"rectangle", "triangle"}:  # [0, 2pi] quantize
+            if self.mode in {"rectangle", "triangle", "butterfly"}:  # [0, 2pi] quantize
                 ratio = 2 * np.pi / (2 ** self.bit - 1)
                 x.div_(ratio).round_().mul_(ratio)
             elif self.mode in {"diagonal"}:  # [0, pi] quantize
@@ -1051,7 +1056,7 @@ class ThermalCrosstalkSimulator(object):
     def simple_simulate(
         self, phases: Tensor, mixedtraining_mask: Optional[Tensor] = None, mode: str = "rectangle"
     ) -> Tensor:
-        assert mode in self.__mode_list__, logger.error(f"Only support {self.__mode_list__}. But got {mode}")
+        assert mode in self.__mode_list__, logger.error(f"Only support mode in {self.__mode_list__}. But got mode: {mode}")
         if mode == "triangle":
             return self.simple_simulate_triangle(phases, mixedtraining_mask)
         elif mode == "rectangle":

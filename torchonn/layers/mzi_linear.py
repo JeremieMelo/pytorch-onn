@@ -50,7 +50,7 @@ class MZILinear(ONNBaseLayer):
         out_features: int,
         bias: bool = False,
         mode: str = "weight",
-        decompose_alg="clements",
+        decompose_alg: str = "clements",
         photodetect: bool = True,
         device: Device = torch.device("cpu"),
     ):
@@ -502,7 +502,7 @@ class MZIBlockLinear(ONNBaseLayer):
         bias: bool = False,
         miniblock: int = 4,
         mode: str = "weight",
-        decompose_alg="clements",
+        decompose_alg: str = "clements",
         photodetect: bool = True,
         device: Device = torch.device("cpu"),
     ):

@@ -13,6 +13,7 @@ import torch
 import torch.cuda
 from setuptools import Command, find_packages, setup
 from torch.utils.cpp_extension import CUDA_HOME, BuildExtension, CppExtension, CUDAExtension
+from torchonn import __version__
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -55,7 +56,7 @@ torch_minor_version = "-DTORCH_MINOR_VERSION=%d" % (int(tokens[1]))
 
 
 def add_prefix(filename):
-    return os.path.join("torchonn/op/cuda_extension/matrix_parametrization", filename)
+    return os.path.join("torchonn/op/cuda_extension", filename)
 
 
 ext_modules = []
@@ -63,8 +64,52 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
     extension = CUDAExtension(
         "matrix_parametrization_cuda",
         [
-            add_prefix("matrix_parametrization_cuda.cpp"),
-            add_prefix("matrix_parametrization_cuda_kernel.cu"),
+            add_prefix("matrix_parametrization/matrix_parametrization_cuda.cpp"),
+            add_prefix("matrix_parametrization/matrix_parametrization_cuda_kernel.cu"),
+        ],
+        extra_compile_args={
+            "cxx": ["-g", "-fopenmp", "-O2", torch_major_version, torch_minor_version],
+            "nvcc": [
+                "-O3",
+                "-arch=sm_60",
+                "-gencode=arch=compute_60,code=sm_60",
+                "-gencode=arch=compute_61,code=sm_61",
+                "-gencode=arch=compute_70,code=sm_70",
+                "-gencode=arch=compute_75,code=sm_75",
+                "-gencode=arch=compute_75,code=compute_75",
+                "--use_fast_math",
+            ],
+        },
+    )
+    ext_modules.append(extension)
+
+    extension = CUDAExtension(
+        "hadamard_cuda",
+        [
+            add_prefix("hadamard_cuda/hadamard_cuda.cpp"),
+            add_prefix("hadamard_cuda/hadamard_cuda_kernel.cu"),
+        ],
+        extra_compile_args={
+            "cxx": ["-g", "-fopenmp", "-O2", torch_major_version, torch_minor_version],
+            "nvcc": [
+                "-O3",
+                "-arch=sm_60",
+                "-gencode=arch=compute_60,code=sm_60",
+                "-gencode=arch=compute_61,code=sm_61",
+                "-gencode=arch=compute_70,code=sm_70",
+                "-gencode=arch=compute_75,code=sm_75",
+                "-gencode=arch=compute_75,code=compute_75",
+                "--use_fast_math",
+            ],
+        },
+    )
+    ext_modules.append(extension)
+
+    extension = CUDAExtension(
+        "universal_cuda",
+        [
+            add_prefix("universal_cuda/universal_cuda.cpp"),
+            add_prefix("universal_cuda/universal_cuda_kernel.cu"),
         ],
         extra_compile_args={
             "cxx": ["-g", "-fopenmp", "-O2", torch_major_version, torch_minor_version],
@@ -84,7 +129,7 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
 
 setup(
     name="torchonn",
-    version="0.0.2",
+    version=__version__,
     description="Pytorch-centric Optical Neural Network Library",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -99,7 +144,6 @@ setup(
         "setuptools>=52.0.0",
         "torch>=1.8.0",
         "pyutils>=0.0.1",
-        "torchonn>=0.0.2",
         "matplotlib>=3.3.4",
         "svglib>=1.1.0",
         "scipy>=1.5.4",

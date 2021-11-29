@@ -1,19 +1,15 @@
+/*
+ * @Author: Jiaqi Gu
+ * @Date: 2020-06-04 14:16:01
+ * @LastEditors: Jiaqi Gu (jqgu@utexas.edu)
+ * @LastEditTime: 2021-11-29 03:01:34
+ */
 /* Adated from the CUDA samples https://docs.nvidia.com/cuda/cuda-samples/index.html.
    Changed from "natural order" Hadamard transform (larger strides before
    smaller strides) to the standard Hadamard transform (smaller strides before
    larger strides).
  */
 
-/*
- * Copyright 1993-2015 NVIDIA Corporation.  All rights reserved.
- *
- * Please refer to the NVIDIA end user license agreement (EULA) associated
- * with this source code for terms and conditions that govern your use of
- * this software. Any use, reproduction, disclosure, or distribution of
- * this software and related documentation outside the terms of the EULA
- * is strictly prohibited.
- *
- */
 #include "cuda_runtime.h"
 
 #define PI (3.141592653589793)

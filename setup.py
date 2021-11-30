@@ -173,8 +173,6 @@ setup(
     python_requires=">=3.6",
     include_package_data=True,
     packages=find_packages(),
-    # packages=["models", "layers", "op", "devices"],
-    # package_dir={"": "torchonn"},
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExtension, "clean": CleanCommand},
 )

@@ -60,6 +60,20 @@ def add_prefix(filename):
 
 
 ext_modules = []
+extra_compile_args = {
+    "cxx": ["-g", "-fopenmp", "-O2", torch_major_version, torch_minor_version],
+    "nvcc": [
+        "-O3",
+        "-arch=sm_60",
+        "-gencode=arch=compute_60,code=sm_60",
+        "-gencode=arch=compute_61,code=sm_61",
+        "-gencode=arch=compute_70,code=sm_70",
+        "-gencode=arch=compute_75,code=sm_75",
+        "-gencode=arch=compute_75,code=compute_75",
+        "--use_fast_math",
+    ],
+}
+
 if torch.cuda.is_available() and CUDA_HOME is not None:
     extension = CUDAExtension(
         "matrix_parametrization_cuda",
@@ -67,19 +81,7 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
             add_prefix("matrix_parametrization/matrix_parametrization_cuda.cpp"),
             add_prefix("matrix_parametrization/matrix_parametrization_cuda_kernel.cu"),
         ],
-        extra_compile_args={
-            "cxx": ["-g", "-fopenmp", "-O2", torch_major_version, torch_minor_version],
-            "nvcc": [
-                "-O3",
-                "-arch=sm_60",
-                "-gencode=arch=compute_60,code=sm_60",
-                "-gencode=arch=compute_61,code=sm_61",
-                "-gencode=arch=compute_70,code=sm_70",
-                "-gencode=arch=compute_75,code=sm_75",
-                "-gencode=arch=compute_75,code=compute_75",
-                "--use_fast_math",
-            ],
-        },
+        extra_compile_args=extra_compile_args,
     )
     ext_modules.append(extension)
 
@@ -89,19 +91,7 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
             add_prefix("hadamard_cuda/hadamard_cuda.cpp"),
             add_prefix("hadamard_cuda/hadamard_cuda_kernel.cu"),
         ],
-        extra_compile_args={
-            "cxx": ["-g", "-fopenmp", "-O2", torch_major_version, torch_minor_version],
-            "nvcc": [
-                "-O3",
-                "-arch=sm_60",
-                "-gencode=arch=compute_60,code=sm_60",
-                "-gencode=arch=compute_61,code=sm_61",
-                "-gencode=arch=compute_70,code=sm_70",
-                "-gencode=arch=compute_75,code=sm_75",
-                "-gencode=arch=compute_75,code=compute_75",
-                "--use_fast_math",
-            ],
-        },
+        extra_compile_args=extra_compile_args,
     )
     ext_modules.append(extension)
 
@@ -111,19 +101,7 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
             add_prefix("universal_cuda/universal_cuda.cpp"),
             add_prefix("universal_cuda/universal_cuda_kernel.cu"),
         ],
-        extra_compile_args={
-            "cxx": ["-g", "-fopenmp", "-O2", torch_major_version, torch_minor_version],
-            "nvcc": [
-                "-O3",
-                "-arch=sm_60",
-                "-gencode=arch=compute_60,code=sm_60",
-                "-gencode=arch=compute_61,code=sm_61",
-                "-gencode=arch=compute_70,code=sm_70",
-                "-gencode=arch=compute_75,code=sm_75",
-                "-gencode=arch=compute_75,code=compute_75",
-                "--use_fast_math",
-            ],
-        },
+        extra_compile_args=extra_compile_args,
     )
     ext_modules.append(extension)
 

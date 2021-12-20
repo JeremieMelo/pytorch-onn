@@ -164,7 +164,7 @@ class phase_quantize_fn(torch.nn.Module):
         self.device = device
 
         self.crosstal_simulator = ThermalCrosstalkSimulator(
-            plotting=False, gaussian_filter_size=3, gaussian_filter_std=crosstalk_factor, device=self.device
+            plotting=False, filter_size=3, crosstalk_factor=crosstalk_factor, device=self.device
         )
 
     def set_gamma_noise(self, noise_std, random_state=None):

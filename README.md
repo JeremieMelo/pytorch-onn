@@ -155,3 +155,4 @@ Jiaqi Gu (jqgu@utexas.edu)
 
 # Related Projects using PyTorch-ONN Library
 > **Scalable ONN on-chip learning**: See [L2ight](https://github.com/JeremieMelo/L2ight), NeurIPS 2021.
+> **SqueezeLight: Scalable ONNs with Multi-Operand Ring Resonators**: See [SqueezeLight](https://github.com/JeremieMelo/SqueezeLight), DATE 2021.

@@ -1,6 +1,16 @@
 <p align="center">
 <img src="torchonn_logo.jpg" alt="torchonn Logo" width="450">
 </p>
+
+```
+@inproceedings{jiaqigu2021L2ight,
+    title     = {L2ight: Enabling On-Chip Learning for Optical Neural Networks via Efficient in-situ Subspace Optimization},
+    author    = {Jiaqi Gu and Hanqing Zhu and Chenghao Feng and Zixuan Jiang and Ray T. Chen and David Z. Pan},
+    booktitle = {Conference on Neural Information Processing Systems (NeurIPS)},
+    year      = {2021}
+}
+```
+
 # Torch-ONN
 A PyTorch-centric Optical Neural Network Library
 

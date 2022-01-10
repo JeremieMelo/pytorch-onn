@@ -1,22 +1,27 @@
-# pytorch-onn
+<p align="center">
+<img src="torchonn_logo.jpg" alt="torchonn Logo" width="450">
+</p>
+# Torch-ONN
 A PyTorch-centric Optical Neural Network Library
 
 [![MIT License](https://img.shields.io/apm/l/atomic-design-ui.svg?)](https://github.com/JeremieMelo/pytorch-onn/blob/release/LICENSE)
 
 <!-- toc -->
 
-- [News](#news)
-- [Installation](#installation)
-  - [From Source](#from-source)
-    - [Dependencies](#dependencies)
-    - [Get the PyTorch-ONN Source](#get-the-pytorch-onn-source)
-    - [Install PyTorch-ONN](#install-pytorch-onn)
-- [Usage](#usage)
-- [Features](#features)
-- [TODOs](#todos)
-- [Files](#files)
+- [Torch-ONN](#torch-onn)
+  - [News](#news)
+  - [Installation](#installation)
+    - [From Source](#from-source)
+      - [Dependencies](#dependencies)
+      - [Get the PyTorch-ONN Source](#get-the-pytorch-onn-source)
+      - [Install PyTorch-ONN](#install-pytorch-onn)
+  - [Usage](#usage)
+  - [Features](#features)
+  - [TODOs](#todos)
+  - [Files](#files)
 - [More Examples](#more-examples)
-- [Related Projects](#related-projects-using-pytorch-onn-library)
+  - [Contact](#contact)
+- [Related Projects using PyTorch-ONN Library](#related-projects-using-pytorch-onn-library)
 
 <!-- tocstop -->
 ## News

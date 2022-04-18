@@ -170,6 +170,7 @@ Jiaqi Gu (jqgu@utexas.edu)
 
 # Related Projects using PyTorch-ONN Library
 - > **Automatic photonic tensor core design**: See [ADEPT](https://github.com/JeremieMelo/ADEPT), DAC 2022.
+- > **Endurance-enhanced photonic in-memory computing**: See [ELight](https://github.com/zhuhanqing/ELight), ASP-DAC 2022.
 - > **Scalable ONN on-chip learning**: See [L2ight](https://github.com/JeremieMelo/L2ight), NeurIPS 2021.
 - > **Memory-efficient ONN architecture**: See [Memory-Efficient-ONN](https://github.com/JeremieMelo/Memory-Efficient-Multi-Level-Generation), ICCV 2021.
 - > **SqueezeLight: Scalable ONNs with Multi-Operand Ring Resonators**: See [SqueezeLight](https://github.com/JeremieMelo/SqueezeLight), DATE 2021.

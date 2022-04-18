@@ -35,6 +35,7 @@ A PyTorch-centric Optical Neural Network Library
 
 <!-- tocstop -->
 ## News
+- _**04/18/2022**_: v0.0.3 available. SqueezeLight architecture based on multi-operand microrings for ultra-compact optical neurocomputing! (Gu+, [SqueezeLight](https://doi.org/10.23919/DATE51398.2021.9474147) DATE 2021)
 - _**11/28/2021**_: v0.0.2 available. FFT-ONN-family is supported with trainable butterfly meshes for area-efficient frequency-domain optical neurocomputing! (Gu+, [FFT-ONN](https://doi.org/10.1109/ASP-DAC47756.2020.9045156) ASP-DAC 2020) (Gu+, [FFT-ONN-v2](https://doi.org/10.1109/TCAD.2020.3027649) IEEE TCAD 2021) (Feng+, [PSNN](https://arxiv.org/abs/2111.06705) arXiv 2021)
 - _**06/10/2021**_: v0.0.1 available. MZI-ONN (Shen+, [MZI-ONN](https://doi.org/10.1038/nphoton.2017.93)) is supported. Feedbacks are highly welcomed!
 
@@ -124,9 +125,10 @@ class ONNModel(ONNBaseModel):
 ## TODOs
 - [ ] Support micro-ring resonator (MRR)-based ONN. (Tait+, [SciRep](https://doi.org/10.1038/s41598-017-07754-z) 2017)
 <!-- - [x] Support general frequency-domain ONN. (Gu+, [FFT-ONN](https://doi.org/10.1109/ASP-DAC47756.2020.9045156) ASP-DAC 2020) (Gu+, [FFT-ONN-v2](https://doi.org/10.1109/TCAD.2020.3027649) IEEE TCAD 2021) -->
-- [ ] Support multi-operand micro-ring (MORR)-based ONN. (Gu+, [SqueezeLight](https://jeremiemelo.github.io/publications/papers/ONN_DATE2021_SqueezeLight_Gu.pdf) DATE 2021)
+<!-- - [ ] Support multi-operand micro-ring (MORR)-based ONN. (Gu+, [SqueezeLight](https://jeremiemelo.github.io/publications/papers/ONN_DATE2021_SqueezeLight_Gu.pdf) DATE 2021) -->
 - [ ] Support differentiable quantization-aware training. (Gu+, [ROQ](https://doi.org/10.23919/DATE48585.2020.9116521) DATE 2020)
 - [ ] Support ONN on-chip learning via zeroth-order optimization. (Gu+, [FLOPS](https://doi.org/10.1109/DAC18072.2020.9218593) DAC 2020) (Gu+, [MixedTrain](https://arxiv.org/abs/2012.11148) AAAI 2021)
+- [ ] Support automatic differentiable ONN architecture search with SuperMesh training. (Gu+, [ADEPT](https://arxiv.org/abs/2112.08703) DAC 2022)
 
 
 ## Files

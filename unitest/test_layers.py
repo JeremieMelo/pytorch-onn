@@ -11,7 +11,14 @@ import torch
 import numpy as np
 import torchonn as onn
 from pyutils.general import logger
-from torchonn.layers import MZIBlockConv2d, MZIBlockLinear, FFTONNBlockLinear, FFTONNBlockConv2d
+from torchonn.layers import (
+    MZIBlockConv2d,
+    MZIBlockLinear,
+    FFTONNBlockLinear,
+    FFTONNBlockConv2d,
+    AllPassMORRCirculantLinear,
+    AllPassMORRCirculantConv2d,
+)
 
 
 class TestLayers(unittest.TestCase):
@@ -78,6 +85,45 @@ class TestLayers(unittest.TestCase):
         x = torch.randn(1, 8, 4, 4, device=device)
         weight = fc.build_weight().data.clone()
         y = fc(x).detach()
+        print(weight)
+        print(y)
+
+    def test_allpassmorrcirculantlinear(self):
+        device = torch.device("cuda:0")
+        layer = AllPassMORRCirculantLinear(
+            8,
+            8,
+            bias=True,
+            miniblock=4,
+            morr_init=True,
+            trainable_morr_scale=True,
+            trainable_morr_bias=True,
+            device=device,
+        ).to(device)
+        layer.reset_parameters(morr_init=True)
+        x = torch.randn(1, 8, device=device)
+        weight = layer.build_weight()[0].data.clone()
+        y = layer(x).detach()
+        print(weight)
+        print(y)
+
+    def test_allpassmorrcirculantconv2d(self):
+        device = torch.device("cuda:0")
+        layer = AllPassMORRCirculantConv2d(
+            8,
+            8,
+            3,
+            bias=True,
+            miniblock=4,
+            morr_init=True,
+            trainable_morr_scale=True,
+            trainable_morr_bias=True,
+            device=device,
+        ).to(device)
+        layer.reset_parameters(morr_init=True)
+        x = torch.randn(1, 8, 4, 4, device=device)
+        weight = layer.build_weight().data.clone()
+        y = layer(x).detach()
         print(weight)
         print(y)
 

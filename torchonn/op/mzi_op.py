@@ -17,7 +17,7 @@ from pyutils.compute import add_gaussian_noise_cpu, gen_gaussian_noise
 from pyutils.general import logger
 from pyutils.quantize import uniform_quantize, uniform_quantize_cpu
 from pyutils.torch_train import apply_weight_decay, set_torch_deterministic
-from torch.tensor import Tensor
+from torch import Tensor
 from torch.types import Device, _size
 from torchonn.op.matrix_parametrization import RealUnitaryDecomposerBatch
 

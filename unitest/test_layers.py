@@ -20,6 +20,10 @@ from torchonn.layers import (
     AllPassMORRCirculantConv2d,
     PCMConv2d,
     PCMLinear,
+    SuperBlockLinear,
+    SuperBlockConv2d,
+    super_layer_name_dict,
+    get_named_sample_arch,
 )
 
 
@@ -115,7 +119,6 @@ class TestLayers(unittest.TestCase):
         print(weight)
         print(y)
 
-
     def test_allpassmorrcirculantconv2d(self):
         device = torch.device("cuda:0")
         layer = AllPassMORRCirculantConv2d(
@@ -176,6 +179,94 @@ class TestLayers(unittest.TestCase):
         y = layer(x).detach()
         print(weight)
         print(y)
+
+    def test_superblocklinear(self):
+        device = torch.device("cuda:0")
+        arch = dict(
+            n_waveguides=4,
+            n_blocks=4,
+            n_layers_per_block=2,
+            n_front_share_blocks=4,
+            share_ps="row_col",
+            interleave_dc=True,
+            symmetry_cr=False,
+            device_cost=dict(
+                ps_weight=6.8,
+                dc_weight=1.5,
+                cr_weight=0.064,
+                area_upper_bound=120,
+                area_lower_bound=70,
+                first_active_block=True,
+            ),
+        )
+
+        super_layer = super_layer_name_dict["adept"](arch=arch, device=device)
+
+        layer = SuperBlockLinear(
+            8,
+            8,
+            bias=True,
+            miniblock=4,
+            super_layer=super_layer,
+            device=device,
+        ).to(device)
+        layer.reset_parameters()
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
+        x = torch.randn(1, 8, device=device)
+        super_layer.build_arch_mask("gumbel_soft")
+        weight = layer.build_weight().data.clone()
+        y = layer(x).detach()
+        print(weight)
+        print(y)
+
+
+    def test_superblockconv2d(self):
+        device = torch.device("cuda:0")
+        # arch definition
+        arch = dict(
+            n_waveguides=4,
+            n_blocks=4,
+            n_layers_per_block=2,
+            n_front_share_blocks=4,
+            share_ps="row_col",
+            interleave_dc=True,
+            symmetry_cr=False,
+            device_cost=dict(
+                ps_weight=6.8,
+                dc_weight=1.5,
+                cr_weight=0.064,
+                area_upper_bound=120,
+                area_lower_bound=70,
+                first_active_block=True,
+            ),
+        )
+
+        # use the arch definition to create a super optical layer
+        super_layer = super_layer_name_dict["adept"](arch=arch, device=device)
+
+        # when creating the super conv2d, pass the super_layer to it
+        layer = SuperBlockConv2d(
+            8,
+            8,
+            3,
+            bias=True,
+            miniblock=4,
+            super_layer=super_layer,
+            device=device,
+        ).to(device)
+        layer.reset_parameters()
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
+        x = torch.randn(1, 8, 4, 4, device=device)
+
+        # explicitly build the architecture mask during each training iteration before forward
+        super_layer.build_arch_mask("gumbel_soft")
+        weight = layer.build_weight().data.clone()
+        y = layer(x).detach()
+        print(weight)
+        print(y)
+
 
 
 if __name__ == "__main__":

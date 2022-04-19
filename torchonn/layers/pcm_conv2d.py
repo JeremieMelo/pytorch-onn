@@ -275,8 +275,8 @@ class PCMConv2d(ONNBaseLayer):
         """
         get the output features size
         """
-        h_out = (img_height - self.kernel_size + 2 * self.padding) / self.stride + 1
-        w_out = (img_width - self.kernel_size + 2 * self.padding) / self.stride + 1
+        h_out = (img_height - self.kernel_size[0] + 2 * self.padding[0]) / self.stride[0] + 1
+        w_out = (img_width - self.kernel_size[1] + 2 * self.padding[1]) / self.stride[1] + 1
         return (int(h_out), int(w_out))
 
     def get_difference_loss_global_L1(self, loss_flag: bool) -> Tensor:

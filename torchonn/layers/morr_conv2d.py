@@ -437,6 +437,14 @@ class AllPassMORRCirculantConv2d(ONNBaseLayer):
         else:
             self.weight.data.masked_fill_(~mask.view_as(self.weight.data), 0)
 
+    def get_output_dim(self, img_height: int, img_width: int) -> Tuple[int, int]:
+        """
+        get the output features size
+        """
+        h_out = (img_height - self.kernel_size[0] + 2 * self.padding[0]) / self.stride[0] + 1
+        w_out = (img_width - self.kernel_size[1] + 2 * self.padding[1]) / self.stride[1] + 1
+        return (int(h_out), int(w_out))
+
     def forward(self, x: Tensor) -> Tensor:
         if self.in_bit < 16:
             x = self.input_quantizer(x)

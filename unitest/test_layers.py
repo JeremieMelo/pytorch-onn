@@ -18,6 +18,8 @@ from torchonn.layers import (
     FFTONNBlockConv2d,
     AllPassMORRCirculantLinear,
     AllPassMORRCirculantConv2d,
+    PCMConv2d,
+    PCMLinear,
 )
 
 
@@ -70,21 +72,25 @@ class TestLayers(unittest.TestCase):
 
     def test_fftonnblocklinear(self):
         device = torch.device("cuda:0")
-        fc = FFTONNBlockLinear(8, 8, bias=False, miniblock=4, mode="fft", device=device).to(device)
-        fc.reset_parameters(mode="fft")
+        layer = FFTONNBlockLinear(8, 8, bias=False, miniblock=4, mode="fft", device=device).to(device)
+        layer.reset_parameters(mode="fft")
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
         x = torch.randn(1, 8, device=device)
-        weight = fc.build_weight().data.clone()
-        y = fc(x).detach()
+        weight = layer.build_weight().data.clone()
+        y = layer(x).detach()
         print(weight)
         print(y)
 
     def test_fftonnblockconv2d(self):
         device = torch.device("cuda:0")
-        fc = FFTONNBlockConv2d(8, 8, 3, bias=False, miniblock=4, mode="fft", device=device).to(device)
-        fc.reset_parameters(mode="fft")
+        layer = FFTONNBlockConv2d(8, 8, 3, bias=False, miniblock=4, mode="fft", device=device).to(device)
+        layer.reset_parameters(mode="fft")
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
         x = torch.randn(1, 8, 4, 4, device=device)
-        weight = fc.build_weight().data.clone()
-        y = fc(x).detach()
+        weight = layer.build_weight().data.clone()
+        y = layer(x).detach()
         print(weight)
         print(y)
 
@@ -101,11 +107,14 @@ class TestLayers(unittest.TestCase):
             device=device,
         ).to(device)
         layer.reset_parameters(morr_init=True)
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
         x = torch.randn(1, 8, device=device)
         weight = layer.build_weight()[0].data.clone()
         y = layer(x).detach()
         print(weight)
         print(y)
+
 
     def test_allpassmorrcirculantconv2d(self):
         device = torch.device("cuda:0")
@@ -121,7 +130,48 @@ class TestLayers(unittest.TestCase):
             device=device,
         ).to(device)
         layer.reset_parameters(morr_init=True)
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
         x = torch.randn(1, 8, 4, 4, device=device)
+        weight = layer.build_weight().data.clone()
+        y = layer(x).detach()
+        print(weight)
+        print(y)
+
+    def test_pcmconv2d(self):
+        device = torch.device("cuda:0")
+        layer = PCMConv2d(
+            8,
+            8,
+            3,
+            bias=True,
+            block_size=8,
+            mode="block",
+            device=device,
+        ).to(device)
+        layer.reset_parameters()
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
+        x = torch.randn(1, 8, 4, 4, device=device)
+        weight = layer.build_weight().data.clone()
+        y = layer(x).detach()
+        print(weight)
+        print(y)
+
+    def test_pcmlinear(self):
+        device = torch.device("cuda:0")
+        layer = PCMLinear(
+            8,
+            8,
+            bias=True,
+            block_size=8,
+            mode="block",
+            device=device,
+        ).to(device)
+        layer.reset_parameters()
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
+        x = torch.randn(1, 8, device=device)
         weight = layer.build_weight().data.clone()
         y = layer(x).detach()
         print(weight)

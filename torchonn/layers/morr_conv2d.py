@@ -262,6 +262,15 @@ class AllPassMORRCirculantConv2d(ONNBaseLayer):
         for name, param in param_dict.items():
             getattr(self, name).data.copy_(param)
 
+    def set_weight_bitwidth(self, w_bit: int) -> None:
+        self.w_bit = w_bit
+        self.weight_quantizer.set_bitwidth(w_bit)
+        self.morr_output_scale_quantizer.set_bitwidth(w_bit)
+
+    def set_input_bitwidth(self, in_bit: int) -> None:
+        self.in_bit = in_bit
+        self.input_quantizer.set_bitwidth(in_bit)
+
     def input_modulator(self, x: Tensor) -> Tensor:
         ### voltage to power, which is proportional to the phase shift
         return x * x

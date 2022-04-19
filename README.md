@@ -35,6 +35,7 @@ A PyTorch-centric Optical Neural Network Library
 
 <!-- tocstop -->
 ## News
+- _**04/18/2022**_: v0.0.4 available. Phase change material (PCM)-based photonic in-memory computing with endurance enhancement! (Zhu+, [ELight](https://doi.org/10.1109/ASP-DAC52403.2022.9712497) ASP-DAC 2022)
 - _**04/18/2022**_: v0.0.3 available. SqueezeLight architecture based on multi-operand microrings for ultra-compact optical neurocomputing! (Gu+, [SqueezeLight](https://doi.org/10.23919/DATE51398.2021.9474147) DATE 2021)
 - _**11/28/2021**_: v0.0.2 available. FFT-ONN-family is supported with trainable butterfly meshes for area-efficient frequency-domain optical neurocomputing! (Gu+, [FFT-ONN](https://doi.org/10.1109/ASP-DAC47756.2020.9045156) ASP-DAC 2020) (Gu+, [FFT-ONN-v2](https://doi.org/10.1109/TCAD.2020.3027649) IEEE TCAD 2021) (Feng+, [PSNN](https://arxiv.org/abs/2111.06705) arXiv 2021)
 - _**06/10/2021**_: v0.0.1 available. MZI-ONN (Shen+, [MZI-ONN](https://doi.org/10.1038/nphoton.2017.93)) is supported. Feedbacks are highly welcomed!
@@ -121,6 +122,8 @@ class ONNModel(ONNBaseModel):
  `python3 unitest/test_op.py`
  , and check the runtime comparison.
 - Support pytorch training general frequency-domain ONNs (Gu+, [FFT-ONN](https://doi.org/10.1109/ASP-DAC47756.2020.9045156) ASP-DAC 2020) (Gu+, [FFT-ONN-v2](https://doi.org/10.1109/TCAD.2020.3027649) IEEE TCAD 2021) (Feng+, [PSNN](https://arxiv.org/abs/2111.06705)). Support FFT-ONN BlockLinear, and BlockConv2d. Support `fft`, `hadamard`, `zero_bias`, and `trainable` modes.
+- Support multi-operand ring-based ONN architecture (Gu+, [SqueezeLight](https://doi.org/10.23919/DATE51398.2021.9474147) DATE 2021). Support AllpassMORRCirculantLinear, AllpassMORRCirculantConv2d with built-in MORR nonlinearity.
+- Support phase change material (PCM)-based ONN architecture (Zhu+, [ELight](https://doi.org/10.1109/ASP-DAC52403.2022.9712497) ASP-DAC 2022). Support PCMLinear and PCMConv2d with logrithmic PCM wire quantization and PCM array assignment.
 
 ## TODOs
 - [ ] Support micro-ring resonator (MRR)-based ONN. (Tait+, [SciRep](https://doi.org/10.1038/s41598-017-07754-z) 2017)

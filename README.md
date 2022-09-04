@@ -1,6 +1,7 @@
 <p align="center">
 <img src="torchonn_logo.jpg" alt="torchonn Logo" width="450">
 </p>
+<h2><p align="center">A PyTorch Library for Photonic Integrated Circuit Simulation and Photonic AI Computing</p></h2>
 
 ```
 @inproceedings{jiaqigu2021L2ight,
@@ -11,11 +12,25 @@
 }
 ```
 
-# Torch-ONN
-A PyTorch-centric Optical Neural Network Library
+<h3><p align="center">Fast, Scalable, Easy Customization, Support Hardware-Aware Cross-Layer Co-Design</p></h3>
 
-[![MIT License](https://img.shields.io/apm/l/atomic-design-ui.svg?)](https://github.com/JeremieMelo/pytorch-onn/blob/release/LICENSE)
+<p align="center">
+    <a href="https://github.com/JeremieMelo/pytorch-onn/blob/release/LICENSEE">
+        <img alt="MIT License" src="https://img.shields.io/apm/l/atomic-design-ui.svg?">
+    </a>    
+</p>
+<br />
 
+# 👋 Welcome
+
+#### What it is doing
+Integrated neuromorphic photonics simulation framework based on PyTorch. It supports coherent and incoherent optical neural networks (ONNs) training/inference on GPUs. It can scale up to million-parameter ONNs with efficient implementation.
+#### Who will benefit
+Researchers on neuromorphic photonics, optical AI system design, photonic integrated circuit optimization, ONN training/inference.
+#### Features
+CUDA-backed fast GPU support, optimized highly-parallel tensorized processing, versatile APIs for device/circuit/architecture/algorithm co-optimization
+
+## Contents
 <!-- toc -->
 
 - [Torch-ONN](#torch-onn)

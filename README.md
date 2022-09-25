@@ -64,7 +64,7 @@ CUDA-backed fast GPU support, optimized highly-parallel tensorized processing, v
 - Python >= 3.6
 - PyTorch >= 1.8.0
 - Tensorflow-gpu >= 2.5.0
-- pyutils >= 0.0.1
+- [pyutils](https://github.com/JeremieMelo/pyutility) >= 0.0.1
 - Others are listed in requirements.txt
 - GPU model training requires NVIDIA GPUs and compatible CUDA
 

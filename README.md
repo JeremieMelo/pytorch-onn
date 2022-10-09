@@ -190,6 +190,7 @@ Jiaqi Gu (jqgu@utexas.edu)
 
 
 # Related Projects using PyTorch-ONN Library
+- > **Neural operator-enabled fast photonic device simulation**: See [NeurOLight](https://github.com/JeremieMelo/NeurOLight), NeurIPS 2022.
 - > **Automatic photonic tensor core design**: See [ADEPT](https://github.com/JeremieMelo/ADEPT), DAC 2022.
 - > **Endurance-enhanced photonic in-memory computing**: See [ELight](https://github.com/zhuhanqing/ELight), ASP-DAC 2022.
 - > **Scalable ONN on-chip learning**: See [L2ight](https://github.com/JeremieMelo/L2ight), NeurIPS 2021.

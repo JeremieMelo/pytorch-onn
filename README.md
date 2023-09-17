@@ -50,6 +50,7 @@ CUDA-backed fast GPU support, optimized highly-parallel tensorized processing, v
 
 <!-- tocstop -->
 ## News
+- _**09/17/2023**_: v0.0.6 available. Support add-drop MRR weight bank and initialize ONN layers from standard pytorch Conv2d/Linear!
 - _**04/19/2022**_: v0.0.5 available. Automatic differentiable photonic tensor core search! Support customized coherent photonic SuperMesh construction from basic building blocks! (Gu+, [ADEPT](https://arxiv.org/abs/2112.08703) DAC 2022)
 - _**04/18/2022**_: v0.0.4 available. Phase change material (PCM)-based photonic in-memory computing with endurance enhancement! (Zhu+, [ELight](https://doi.org/10.1109/ASP-DAC52403.2022.9712497) ASP-DAC 2022)
 - _**04/18/2022**_: v0.0.3 available. SqueezeLight architecture based on multi-operand microrings for ultra-compact optical neurocomputing! (Gu+, [SqueezeLight](https://doi.org/10.23919/DATE51398.2021.9474147) DATE 2021)
@@ -62,9 +63,9 @@ CUDA-backed fast GPU support, optimized highly-parallel tensorized processing, v
 
 #### Dependencies
 - Python >= 3.6
-- PyTorch >= 1.8.0
+- PyTorch >= 1.13.0
 - Tensorflow-gpu >= 2.5.0
-- [pyutils](https://github.com/JeremieMelo/pyutility) >= 0.0.1
+- [pyutils](https://github.com/JeremieMelo/pyutility) >= 0.0.2
 - Others are listed in requirements.txt
 - GPU model training requires NVIDIA GPUs and compatible CUDA
 

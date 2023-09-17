@@ -120,7 +120,7 @@ setup(
         "torchvision>=0.9.0.dev20210130",
         "tqdm>=4.56.0",
         "setuptools>=52.0.0",
-        "torch>=1.8.0",
+        "torch>=1.13.0",
         "pyutils>=0.0.1",
         "matplotlib>=3.3.4",
         "svglib>=1.1.0",
@@ -128,7 +128,7 @@ setup(
         "scikit-learn>=0.24.1",
         "torchsummary>=1.5.1",
         "pyyaml>=5.1.1",
-        "tensorflow-gpu>=2.5.0",
+        "tensorflow>=2.5.0",
     ],
     classifiers=[
         # How mature is this project? Common values are

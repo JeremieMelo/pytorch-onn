@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
+from torch import nn
 import torch.nn.functional as F
 from pyutils.compute import gen_gaussian_noise, get_complex_energy, merge_chunks
 from pyutils.general import logger, print_stat
@@ -63,7 +64,7 @@ class FFTONNBlockLinear(ONNBaseLayer):
         )
         self.v_max = 10.8
         self.v_pi = 4.36
-        self.gamma = np.pi / self.v_pi ** 2
+        self.gamma = np.pi / self.v_pi**2
         self.w_bit = 32
         self.in_bit = 32
         self.photodetect = photodetect
@@ -211,17 +212,109 @@ class FFTONNBlockLinear(ONNBaseLayer):
         if self.bias is not None:
             init.uniform_(self.bias, 0, 0)
 
+    @classmethod
+    def from_layer(
+        cls,
+        layer: nn.Linear,
+        miniblock: int = 4,
+        mode: str = "fft",
+        photodetect: bool = True,
+        verbose: bool = False,
+    ) -> nn.Module:
+        """Initialize from a nn.Linear layer. Weight mapping will be performed
+
+        Args:
+            miniblock (int, optional): miniblock size. Defaults to 4.
+            mode (str, optional): parametrization mode. Defaults to "fft".
+            photodetect (bool, optional): whether to use photodetect. Defaults to True.
+
+        Returns:
+            Module: a converted FFTONNBlockLinear module
+        """
+        assert isinstance(layer, nn.Linear), f"The conversion target must be nn.Linear, but got {type(layer)}."
+        in_features = layer.in_features
+        out_features = layer.out_features
+        bias = layer.bias is not None
+        device = layer.weight.data.device
+        instance = cls(
+            in_features=in_features,
+            out_features=out_features,
+            bias=bias,
+            miniblock=miniblock,
+            mode=mode,
+            photodetect=photodetect,
+            device=device,
+        ).to(device)
+        weight = instance.weight
+        tmp = torch.zeros(instance.out_features_pad, instance.in_features_pad, dtype=torch.cfloat, device=instance.device)
+        tmp.data.real[:out_features, :in_features].copy_(layer.weight)
+        instance.weight.data.copy_(
+            tmp.view(weight.shape[0], weight.shape[2], weight.shape[1], weight.shape[3]).permute(0, 2, 1, 3)
+        )
+        instance.sync_parameters(src="weight", verbose=verbose)
+        if bias:
+            instance.bias.data.copy_(layer.bias)
+
+        return instance
+
     def build_weight_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tensor:
         # differentiable feature is gauranteed
         weight = U.matmul(S.unsqueeze(-1) * V)
         self.weight.data.copy_(weight)
         return weight
 
-    def sync_parameters(self, src: str = "weight") -> None:
+    def sync_parameters(self, src: str = "weight", steps: int = 3000, verbose: bool = False) -> None:
         """
         description: synchronize all parameters from the source parameters
         """
-        self.weight.data.copy_(self.build_weight_from_usv(self.U.data, self.S.data, self.V.data))
+        if src == "phase":
+            # phase to weight
+            self.weight.data.copy_(self.build_weight_from_usv(self.U.data, self.S.data, self.V.data))
+        elif src == "weight":
+            # weight to phase
+            target = self.weight.data
+            params = {}
+            if not self.T.phases.requires_grad:
+                target = target.matmul(torch.linalg.inv(self.V.data))
+            else:
+                params["V"] = self.T.phases
+            if not self.Tr.phases.requires_grad:
+                target = torch.linalg.inv(self.U.data).matmul(target)
+            else:
+                params["U"] = self.Tr.phases
+        
+            params["S"] = self.S
+            if len(params) == 1:  # only has self.S, perform optimal singular value projection
+                self.S.data.copy_(torch.linalg.diagonal(target))
+            else:  # perform gradient descent to solve
+                optimizer = torch.optim.Adam(list(params.values()), lr=1e-3)
+                for i in range(steps):
+                    w = self.S
+                    if "V" in params:
+                        w = w.unsqueeze(-1) * self.V
+                        
+                    if "U" in params:
+                        U = self.U
+                        if w.ndim == self.S.ndim + 1:
+                            w = U.matmul(w)
+                        else:
+                            w = U * w.unsqueeze(-2)
+                            
+                    loss = F.mse_loss(torch.view_as_real(target), torch.view_as_real(w))
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+                    if verbose and (i % 500 == 0 or i == steps - 1):
+                        logger.info(f"Sync weight to phase: step = {i:5d}, mse = {loss.item():.2e}")
+
+        else:
+            raise NotImplementedError
+        if verbose:
+            with torch.no_grad():
+                target = self.weight.data.clone()
+                w = self.build_weight()
+                error = F.mse_loss(torch.view_as_real(w), torch.view_as_real(target))
+                logger.info(f"Mapping Linear to FFTONNBlockLinear: MSE = {error:.2e}")
 
     def build_weight(self, update_list: set = {"phase_U", "phase_S", "phase_V"}) -> Tensor:
         weight = self.build_weight_from_usv(self.U, self.S, self.V)
@@ -265,7 +358,7 @@ class FFTONNBlockLinear(ONNBaseLayer):
             weight = self.build_weight()  # [p, q, k, k]
         else:
             weight = self.weight
-        offset = int(np.ceil(self.grid_dim_x/2)) * self.miniblock
+        offset = int(np.ceil(self.grid_dim_x / 2)) * self.miniblock
         weight = merge_chunks(weight)[: self.out_features, : self.in_features].t()
         weight_pos = weight[:offset, :]
         weight_neg = weight[offset:, :]

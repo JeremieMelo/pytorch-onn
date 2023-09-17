@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
+from torch import nn
 import torch.nn.functional as F
 from pyutils.compute import gen_gaussian_noise, merge_chunks
 from pyutils.general import logger, print_stat
@@ -63,7 +64,7 @@ class MZILinear(ONNBaseLayer):
         )
         self.v_max = 10.8
         self.v_pi = 4.36
-        self.gamma = np.pi / self.v_pi ** 2
+        self.gamma = np.pi / self.v_pi**2
         self.w_bit = 32
         self.in_bit = 32
         self.photodetect = photodetect
@@ -190,8 +191,9 @@ class MZILinear(ONNBaseLayer):
             W = init.kaiming_normal_(
                 torch.empty(self.out_features, self.in_features, dtype=self.U.dtype, device=self.device)
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd")  # must use QR decomposition
             self.U.data.copy_(U)
             self.V.data.copy_(V)
             self.S.data.copy_(torch.ones(S.shape[0], dtype=self.U.dtype, device=self.device))
@@ -199,8 +201,9 @@ class MZILinear(ONNBaseLayer):
             W = init.kaiming_normal_(
                 torch.empty(self.out_features, self.in_features, dtype=self.U.dtype, device=self.device)
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd")  # must use QR decomposition
             delta_list, phi_mat = self.decomposer.decompose(U)
             self.delta_list_U.data.copy_(delta_list)
             self.phase_U.data.copy_(self.decomposer.m2v(phi_mat))
@@ -217,6 +220,45 @@ class MZILinear(ONNBaseLayer):
 
         if self.bias is not None:
             init.uniform_(self.bias, 0, 0)
+
+    @classmethod
+    def from_layer(
+        cls,
+        layer: nn.Linear,
+        mode: str = "weight",
+        decompose_alg: str = "clements",
+        photodetect: bool = True,
+    ) -> nn.Module:
+        """Initialize from a nn.Linear layer. Weight mapping will be performed
+
+        Args:
+            mode (str, optional): parametrization mode. Defaults to "weight".
+            decompose_alg (str, optional): decomposition algorithm. Defaults to "clements".
+            photodetect (bool, optional): whether to use photodetect. Defaults to True.
+
+        Returns:
+            Module: a converted MZILinear module
+        """
+        assert isinstance(layer, nn.Linear), f"The conversion target must be nn.Linear, but got {type(layer)}."
+        in_features = layer.in_features
+        out_features = layer.out_features
+        bias = layer.bias is not None
+        device = layer.weight.data.device
+        instance = cls(
+            in_features=in_features,
+            out_features=out_features,
+            bias=bias,
+            mode=mode,
+            decompose_alg=decompose_alg,
+            photodetect=photodetect,
+            device=device,
+        ).to(device)
+        instance.weight.data.copy_(layer.weight)
+        instance.sync_parameters(src="weight")
+        if bias:
+            instance.bias.data.copy_(layer.bias)
+
+        return instance
 
     def build_weight_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tensor:
         ### differentiable feature is gauranteed
@@ -262,9 +304,7 @@ class MZILinear(ONNBaseLayer):
         self.phase_U = voltage_to_phase(voltage_U, gamma_U)
         self.phase_V = voltage_to_phase(voltage_V, gamma_V)
         self.phase_S = voltage_to_phase(voltage_S, gamma_S)
-        return self.build_weight_from_phase(
-            delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S
-        )
+        return self.build_weight_from_phase(delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S)
 
     def build_phase_from_usv(
         self, U: Tensor, S: Tensor, V: Tensor
@@ -304,16 +344,15 @@ class MZILinear(ONNBaseLayer):
 
     def build_usv_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         ### differentiable feature is gauranteed
-        U, S, V = weight.data.svd(some=False)
-        V = V.transpose(-2, -1).contiguous()
+        # U, S, V = weight.data.svd(some=False) # old version is not precise
+        # V = V.transpose(-2, -1).contiguous()
+        U, S, V = torch.linalg.svd(weight.data, full_matrices=True, driver="gesvd")  # must use QR decomposition
         self.U.data.copy_(U)
         self.S.data.copy_(S)
         self.V.data.copy_(V)
         return U, S, V
 
-    def build_phase_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_phase_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_phase_from_usv(*self.build_usv_from_weight(weight))
 
     def build_voltage_from_phase(
@@ -346,9 +385,7 @@ class MZILinear(ONNBaseLayer):
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(U, S, V))
 
-    def build_voltage_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_voltage_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(*self.build_usv_from_weight(weight)))
 
     def sync_parameters(self, src: str = "weight") -> None:
@@ -384,9 +421,7 @@ class MZILinear(ONNBaseLayer):
                     trunc_range=(-2 * self.phase_noise_std, 2 * self.phase_noise_std),
                 )
 
-            self.build_weight_from_phase(
-                self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale
-            )
+            self.build_weight_from_phase(self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale)
         elif src == "voltage":
             NotImplementedError
         else:
@@ -520,7 +555,7 @@ class MZIBlockLinear(ONNBaseLayer):
         )
         self.v_max = 10.8
         self.v_pi = 4.36
-        self.gamma = np.pi / self.v_pi ** 2
+        self.gamma = np.pi / self.v_pi**2
         self.w_bit = 32
         self.in_bit = 32
         self.photodetect = photodetect
@@ -595,23 +630,21 @@ class MZIBlockLinear(ONNBaseLayer):
 
     def build_parameters(self, mode: str = "weight") -> None:
         ## weight mode
-        weight = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(
-            self.device
-        )
+        weight = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(self.device)
         ## usv mode
         U = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(self.device)
         S = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
         V = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(self.device)
         ## phase mode
         delta_list_U = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
-        phase_U = torch.Tensor(
-            self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2
-        ).to(self.device)
+        phase_U = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2).to(
+            self.device
+        )
         phase_S = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
         delta_list_V = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
-        phase_V = torch.Tensor(
-            self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2
-        ).to(self.device)
+        phase_V = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2).to(
+            self.device
+        )
         # TIA gain
         S_scale = torch.Tensor(self.grid_dim_y, self.grid_dim_x, 1).to(self.device).float()
 
@@ -660,8 +693,9 @@ class MZIBlockLinear(ONNBaseLayer):
                     device=self.device,
                 )
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd")  # must use QR decomposition
             self.U.data.copy_(U)
             self.V.data.copy_(V)
             self.S.data.copy_(S)
@@ -676,8 +710,9 @@ class MZIBlockLinear(ONNBaseLayer):
                     device=self.device,
                 )
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd")  # must use QR decomposition
             delta_list, phi_mat = self.decomposer.decompose(U)
             self.delta_list_U.data.copy_(delta_list)
             self.phase_U.data.copy_(self.decomposer.m2v(phi_mat))
@@ -694,6 +729,53 @@ class MZIBlockLinear(ONNBaseLayer):
 
         if self.bias is not None:
             init.uniform_(self.bias, 0, 0)
+
+    @classmethod
+    def from_layer(
+        cls,
+        layer: nn.Linear,
+        miniblock: int = 4,
+        mode: str = "weight",
+        decompose_alg: str = "clements",
+        photodetect: bool = True,
+    ) -> nn.Module:
+        """Initialize from a nn.Linear layer. Weight mapping will be performed
+
+        Args:
+            miniblock (int, optional): miniblock size. Defaults to 4.
+            mode (str, optional): parametrization mode. Defaults to "weight".
+            decompose_alg (str, optional): decomposition algorithm. Defaults to "clements".
+            photodetect (bool, optional): whether to use photodetect. Defaults to True.
+
+        Returns:
+            Module: a converted MZIBlockLinear module
+        """
+        assert isinstance(layer, nn.Linear), f"The conversion target must be nn.Linear, but got {type(layer)}."
+        in_features = layer.in_features
+        out_features = layer.out_features
+        bias = layer.bias is not None
+        device = layer.weight.data.device
+        instance = cls(
+            in_features=in_features,
+            out_features=out_features,
+            bias=bias,
+            miniblock=miniblock,
+            mode=mode,
+            decompose_alg=decompose_alg,
+            photodetect=photodetect,
+            device=device,
+        ).to(device)
+        weight = instance.weight
+        tmp = torch.zeros(instance.out_features_pad, instance.in_features_pad, device=instance.device)
+        tmp.data[:out_features, :in_features].copy_(layer.weight)
+        instance.weight.data.copy_(
+            tmp.view(weight.shape[0], weight.shape[2], weight.shape[1], weight.shape[3]).permute(0, 2, 1, 3)
+        )
+        instance.sync_parameters(src="weight")
+        if bias:
+            instance.bias.data.copy_(layer.bias)
+
+        return instance
 
     def build_weight_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tensor:
         # differentiable feature is gauranteed
@@ -734,13 +816,9 @@ class MZIBlockLinear(ONNBaseLayer):
         self.phase_U = voltage_to_phase(voltage_U, gamma_U)
         self.phase_V = voltage_to_phase(voltage_V, gamma_V)
         self.phase_S = voltage_to_phase(voltage_S, gamma_S)
-        return self.build_weight_from_phase(
-            delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S
-        )
+        return self.build_weight_from_phase(delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S)
 
-    def build_phase_from_usv(
-        self, U: Tensor, S: Tensor, V: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_phase_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         delta_list, phi_mat = self.decomposer.decompose(U.data.clone())
         self.delta_list_U.data.copy_(delta_list)
         self.phase_U.data.copy_(self.decomposer.m2v(phi_mat))
@@ -776,16 +854,15 @@ class MZIBlockLinear(ONNBaseLayer):
 
     def build_usv_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         ### differentiable feature is gauranteed
-        U, S, V = weight.data.svd(some=False)
-        V = V.transpose(-2, -1).contiguous()
+        # U, S, V = weight.data.svd(some=False)
+        # V = V.transpose(-2, -1).contiguous()
+        U, S, V = torch.linalg.svd(weight.data, full_matrices=True, driver="gesvd")  # must use QR decomposition
         self.U.data.copy_(U)
         self.S.data.copy_(S)
         self.V.data.copy_(V)
         return U, S, V
 
-    def build_phase_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_phase_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_phase_from_usv(*self.build_usv_from_weight(weight))
 
     def build_voltage_from_phase(
@@ -818,9 +895,7 @@ class MZIBlockLinear(ONNBaseLayer):
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(U, S, V))
 
-    def build_voltage_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_voltage_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(*self.build_usv_from_weight(weight)))
 
     def sync_parameters(self, src: str = "weight") -> None:
@@ -856,9 +931,7 @@ class MZIBlockLinear(ONNBaseLayer):
                     trunc_range=(-2 * self.phase_noise_std, 2 * self.phase_noise_std),
                 )
 
-            self.build_weight_from_phase(
-                self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale
-            )
+            self.build_weight_from_phase(self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale)
         elif src == "voltage":
             raise NotImplementedError
         else:

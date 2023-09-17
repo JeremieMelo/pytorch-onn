@@ -24,6 +24,10 @@ class ONNBaseLayer(nn.Module):
 
     def reset_parameters(self) -> None:
         raise NotImplementedError
+    
+    @classmethod
+    def from_layer(cls, layer: nn.Module, *args, **kwargs) -> nn.Module:
+        raise NotImplementedError
 
     def get_num_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)

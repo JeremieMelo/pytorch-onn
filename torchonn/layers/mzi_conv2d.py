@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
+from torch import nn
 import torch.nn.functional as F
 from pyutils.compute import gen_gaussian_noise, merge_chunks
 from pyutils.general import logger, print_stat
@@ -97,7 +98,7 @@ class MZIConv2d(ONNBaseLayer):
         )
         self.v_max = 10.8
         self.v_pi = 4.36
-        self.gamma = np.pi / self.v_pi ** 2
+        self.gamma = np.pi / self.v_pi**2
         self.w_bit = 32
         self.in_bit = 32
         self.photodetect = photodetect
@@ -172,9 +173,9 @@ class MZIConv2d(ONNBaseLayer):
 
     def build_parameters(self, mode: str = "weight") -> None:
         ## weight mode
-        weight = torch.Tensor(
-            self.out_channels, self.in_channels, self.kernel_size[0], self.kernel_size[1]
-        ).to(self.device)
+        weight = torch.Tensor(self.out_channels, self.in_channels, self.kernel_size[0], self.kernel_size[1]).to(
+            self.device
+        )
         ## usv mode
         self.in_channels_flat = self.in_channels * self.kernel_size[0] * self.kernel_size[1]
         U = torch.Tensor(self.out_channels, self.out_channels).to(self.device)
@@ -228,8 +229,9 @@ class MZIConv2d(ONNBaseLayer):
             W = init.kaiming_normal_(
                 torch.empty(self.out_channels, self.in_channels_flat, dtype=self.U.dtype, device=self.device)
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd") # must use QR decomposition
             self.U.data.copy_(U)
             self.V.data.copy_(V)
             self.S.data.copy_(torch.ones(S.shape[0], dtype=self.U.dtype, device=self.device))
@@ -237,8 +239,9 @@ class MZIConv2d(ONNBaseLayer):
             W = init.kaiming_normal_(
                 torch.empty(self.out_channels, self.in_channels_flat, dtype=self.U.dtype, device=self.device)
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd") # must use QR decomposition
             delta_list, phi_mat = self.decomposer.decompose(U)
             self.delta_list_U.data.copy_(delta_list)
             self.phase_U.data.copy_(self.decomposer.m2v(phi_mat))
@@ -256,6 +259,55 @@ class MZIConv2d(ONNBaseLayer):
         if self.bias is not None:
             init.uniform_(self.bias, 0, 0)
 
+    @classmethod
+    def from_layer(
+        cls,
+        layer: nn.Conv2d,
+        mode: str = "weight",
+        decompose_alg: str = "clements",
+        photodetect: bool = True,
+    ) -> nn.Module:
+        """Initialize from a nn.Conv2d layer. Weight mapping will be performed
+
+        Args:
+            mode (str, optional): parametrization mode. Defaults to "weight".
+            decompose_alg (str, optional): decomposition algorithm. Defaults to "clements".
+            photodetect (bool, optional): whether to use photodetect. Defaults to True.
+
+        Returns:
+            Module: a converted MZIConv2d module
+        """
+        assert isinstance(layer, nn.Conv2d), f"The conversion target must be nn.Conv2d, but got {type(layer)}."
+        in_channels = layer.in_channels
+        out_channels = layer.out_channels
+        kernel_size = layer.kernel_size
+        stride = layer.stride
+        padding = layer.padding
+        dilation = layer.dilation
+        groups = layer.groups
+        bias = layer.bias is not None
+        device = layer.weight.data.device
+        instance = cls(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+            mode=mode,
+            decompose_alg=decompose_alg,
+            photodetect=photodetect,
+            device=device,
+        ).to(device)
+        instance.weight.data.copy_(layer.weight)
+        instance.sync_parameters(src="weight")
+        if bias:
+            instance.bias.data.copy_(layer.bias)
+
+        return instance
+
     def build_weight_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tensor:
         ### differentiable feature is gauranteed
         if self.out_channels == self.in_channels_flat:
@@ -264,7 +316,7 @@ class MZIConv2d(ONNBaseLayer):
             weight = torch.mm(U[:, : self.in_channels_flat], S.unsqueeze(1) * V)
         else:
             weight = torch.mm(U * S.unsqueeze(0), V[: self.out_channels, :])
-        self.weight.data.copy_(weight)
+        self.weight.data.copy_(weight.reshape_as(self.weight))
         return weight
 
     def build_weight_from_phase(
@@ -300,9 +352,7 @@ class MZIConv2d(ONNBaseLayer):
         self.phase_U = voltage_to_phase(voltage_U, gamma_U)
         self.phase_V = voltage_to_phase(voltage_V, gamma_V)
         self.phase_S = voltage_to_phase(voltage_S, gamma_S)
-        return self.build_weight_from_phase(
-            delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S
-        )
+        return self.build_weight_from_phase(delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S)
 
     def build_phase_from_usv(
         self, U: Tensor, S: Tensor, V: Tensor
@@ -342,16 +392,15 @@ class MZIConv2d(ONNBaseLayer):
 
     def build_usv_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         ### differentiable feature is gauranteed
-        U, S, V = weight.data.svd(some=False)
-        V = V.transpose(-2, -1).contiguous()
+        # U, S, V = weight.data.svd(some=False)
+        # V = V.transpose(-2, -1).contiguous()
+        U, S, V = torch.linalg.svd(weight.data, full_matrices=True, driver="gesvd") # must use QR decomposition
         self.U.data.copy_(U)
         self.S.data.copy_(S)
         self.V.data.copy_(V)
         return U, S, V
 
-    def build_phase_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_phase_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_phase_from_usv(*self.build_usv_from_weight(weight))
 
     def build_voltage_from_phase(
@@ -384,9 +433,7 @@ class MZIConv2d(ONNBaseLayer):
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(U, S, V))
 
-    def build_voltage_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_voltage_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(*self.build_usv_from_weight(weight)))
 
     def sync_parameters(self, src: str = "weight") -> None:
@@ -394,7 +441,7 @@ class MZIConv2d(ONNBaseLayer):
         description: synchronize all parameters from the source parameters
         """
         if src == "weight":
-            self.build_phase_from_weight(self.weight)
+            self.build_phase_from_weight(self.weight.flatten(1))
         elif src == "usv":
             self.build_phase_from_usv(self.U, self.S, self.V)
             self.build_weight_from_usv(self.U, self.S, self.V)
@@ -422,9 +469,7 @@ class MZIConv2d(ONNBaseLayer):
                     trunc_range=(-2 * self.phase_noise_std, 2 * self.phase_noise_std),
                 )
 
-            self.build_weight_from_phase(
-                self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale
-            )
+            self.build_weight_from_phase(self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale)
         elif src == "voltage":
             NotImplementedError
         else:
@@ -506,12 +551,12 @@ class MZIConv2d(ONNBaseLayer):
             self.build_weight(update_list=param_dict)
 
     def get_output_dim(self, img_height: int, img_width: int) -> _size:
-        h_out = (
-            img_height - self.dilation[0] * (self.kernel_size[0] - 1) - 1 + 2 * self.padding[0]
-        ) / self.stride[0] + 1
-        w_out = (
-            img_width - self.dilation[1] * (self.kernel_size[1] - 1) - 1 + 2 * self.padding[1]
-        ) / self.stride[1] + 1
+        h_out = (img_height - self.dilation[0] * (self.kernel_size[0] - 1) - 1 + 2 * self.padding[0]) / self.stride[
+            0
+        ] + 1
+        w_out = (img_width - self.dilation[1] * (self.kernel_size[1] - 1) - 1 + 2 * self.padding[1]) / self.stride[
+            1
+        ] + 1
         return int(h_out), int(w_out)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -611,7 +656,7 @@ class MZIBlockConv2d(ONNBaseLayer):
 
         self.v_max = 10.8
         self.v_pi = 4.36
-        self.gamma = np.pi / self.v_pi ** 2
+        self.gamma = np.pi / self.v_pi**2
         self.w_bit = 32
         self.in_bit = 32
         self.photodetect = photodetect
@@ -686,23 +731,21 @@ class MZIBlockConv2d(ONNBaseLayer):
 
     def build_parameters(self, mode: str = "weight") -> None:
         ## weight mode
-        weight = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(
-            self.device
-        )
+        weight = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(self.device)
         ## usv mode
         U = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(self.device)
         S = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
         V = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock, self.miniblock).to(self.device)
         ## phase mode
         delta_list_U = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
-        phase_U = torch.Tensor(
-            self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2
-        ).to(self.device)
+        phase_U = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2).to(
+            self.device
+        )
         phase_S = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
         delta_list_V = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock).to(self.device)
-        phase_V = torch.Tensor(
-            self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2
-        ).to(self.device)
+        phase_V = torch.Tensor(self.grid_dim_y, self.grid_dim_x, self.miniblock * (self.miniblock - 1) // 2).to(
+            self.device
+        )
         # TIA gain
         S_scale = torch.Tensor(self.grid_dim_y, self.grid_dim_x, 1).to(self.device).float()
 
@@ -751,8 +794,9 @@ class MZIBlockConv2d(ONNBaseLayer):
                     device=self.device,
                 )
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd") # must use QR decomposition
             self.U.data.copy_(U)
             self.V.data.copy_(V)
             self.S.data.copy_(torch.ones_like(S, device=self.device))
@@ -767,8 +811,9 @@ class MZIBlockConv2d(ONNBaseLayer):
                     device=self.device,
                 )
             )
-            U, S, V = torch.svd(W, some=False)
-            V = V.transpose(-2, -1)
+            # U, S, V = torch.svd(W, some=False)
+            # V = V.transpose(-2, -1)
+            U, S, V = torch.linalg.svd(W, full_matrices=True, driver="gesvd") # must use QR decomposition
             delta_list, phi_mat = self.decomposer.decompose(U)
             self.delta_list_U.data.copy_(delta_list)
             self.phase_U.data.copy_(self.decomposer.m2v(phi_mat))
@@ -786,6 +831,62 @@ class MZIBlockConv2d(ONNBaseLayer):
         if self.bias is not None:
             init.uniform_(self.bias, 0, 0)
 
+    @classmethod
+    def from_layer(
+        cls,
+        layer: nn.Conv2d,
+        miniblock: int = 4,
+        mode: str = "weight",
+        decompose_alg: str = "clements",
+        photodetect: bool = True,
+    ) -> nn.Module:
+        """Initialize from a nn.Conv2d layer. Weight mapping will be performed
+
+        Args:
+            mode (str, optional): parametrization mode. Defaults to "weight".
+            decompose_alg (str, optional): decomposition algorithm. Defaults to "clements".
+            photodetect (bool, optional): whether to use photodetect. Defaults to True.
+
+        Returns:
+            Module: a converted MZIBlockConv2d module
+        """
+        assert isinstance(layer, nn.Conv2d), f"The conversion target must be nn.Conv2d, but got {type(layer)}."
+        in_channels = layer.in_channels
+        out_channels = layer.out_channels
+        kernel_size = layer.kernel_size
+        stride = layer.stride
+        padding = layer.padding
+        dilation = layer.dilation
+        groups = layer.groups
+        bias = layer.bias is not None
+        device = layer.weight.data.device
+        instance = cls(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+            miniblock=miniblock,
+            mode=mode,
+            decompose_alg=decompose_alg,
+            photodetect=photodetect,
+            device=device,
+        ).to(device)
+        weight = instance.weight
+        tmp = torch.zeros(instance.out_channels_pad, instance.in_channels_pad, device=instance.device)
+        tmp.data[:out_channels, :instance.in_channels_flat].copy_(layer.weight.data.flatten(1))
+        instance.weight.data.copy_(
+            tmp.view(weight.shape[0], weight.shape[2], weight.shape[1], weight.shape[3]).permute(0, 2, 1, 3)
+        )
+        instance.sync_parameters(src="weight")
+        if bias:
+            instance.bias.data.copy_(layer.bias)
+
+        return instance
+    
     def build_weight_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tensor:
         # differentiable feature is gauranteed
         weight = U.matmul(S.unsqueeze(-1) * V)
@@ -825,9 +926,7 @@ class MZIBlockConv2d(ONNBaseLayer):
         self.phase_U = voltage_to_phase(voltage_U, gamma_U)
         self.phase_V = voltage_to_phase(voltage_V, gamma_V)
         self.phase_S = voltage_to_phase(voltage_S, gamma_S)
-        return self.build_weight_from_phase(
-            delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S
-        )
+        return self.build_weight_from_phase(delta_list_U, self.phase_U, delta_list_V, self.phase_V, self.phase_S)
 
     def build_phase_from_usv(
         self, U: Tensor, S: Tensor, V: Tensor
@@ -867,16 +966,15 @@ class MZIBlockConv2d(ONNBaseLayer):
 
     def build_usv_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         ### differentiable feature is gauranteed
-        U, S, V = weight.data.svd(some=False)
-        V = V.transpose(-2, -1).contiguous()
+        # U, S, V = weight.data.svd(some=False)
+        # V = V.transpose(-2, -1).contiguous()
+        U, S, V = torch.linalg.svd(weight.data, full_matrices=True, driver="gesvd") # must use QR decomposition
         self.U.data.copy_(U)
         self.S.data.copy_(S)
         self.V.data.copy_(V)
         return U, S, V
 
-    def build_phase_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_phase_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_phase_from_usv(*self.build_usv_from_weight(weight))
 
     def build_voltage_from_phase(
@@ -909,9 +1007,7 @@ class MZIBlockConv2d(ONNBaseLayer):
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(U, S, V))
 
-    def build_voltage_from_weight(
-        self, weight: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def build_voltage_from_weight(self, weight: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.build_voltage_from_phase(*self.build_phase_from_usv(*self.build_usv_from_weight(weight)))
 
     def sync_parameters(self, src: str = "weight") -> None:
@@ -947,9 +1043,7 @@ class MZIBlockConv2d(ONNBaseLayer):
                     trunc_range=(-2 * self.phase_noise_std, 2 * self.phase_noise_std),
                 )
 
-            self.build_weight_from_phase(
-                self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale
-            )
+            self.build_weight_from_phase(self.delta_list_U, phase_U, self.delta_list_V, phase_V, phase_S, self.S_scale)
         elif src == "voltage":
             NotImplementedError
         else:
@@ -1031,12 +1125,12 @@ class MZIBlockConv2d(ONNBaseLayer):
             self.build_weight(update_list=param_dict)
 
     def get_output_dim(self, img_height: int, img_width: int) -> _size:
-        h_out = (
-            img_height - self.dilation[0] * (self.kernel_size[0] - 1) - 1 + 2 * self.padding[0]
-        ) / self.stride[0] + 1
-        w_out = (
-            img_width - self.dilation[1] * (self.kernel_size[1] - 1) - 1 + 2 * self.padding[1]
-        ) / self.stride[1] + 1
+        h_out = (img_height - self.dilation[0] * (self.kernel_size[0] - 1) - 1 + 2 * self.padding[0]) / self.stride[
+            0
+        ] + 1
+        w_out = (img_width - self.dilation[1] * (self.kernel_size[1] - 1) - 1 + 2 * self.padding[1]) / self.stride[
+            1
+        ] + 1
         return int(h_out), int(w_out)
 
     def forward(self, x: Tensor) -> Tensor:

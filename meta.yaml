@@ -1,0 +1,62 @@
+{% set version = "0.0.7" %}
+
+package:
+  name: torchonn
+  version: {{ version }}
+
+source:
+  path: .
+
+build:
+  number: 0
+  # skip: True  # [win]
+  # noarch: python
+  # script_env:
+  #   - PYTHON=
+
+test:
+  imports:
+    - torchonn
+
+requirements:
+  # host:
+  #   - python # this enables conda to use PYTHON environment variable
+  build:
+    - python=3.10
+    - pip >=21.0.1
+    - setuptools >=52.0.0
+    # - numpy >=1.19.2
+    - torchvision
+    - tqdm
+    - pytorch >=2.0.0
+    - matplotlib
+    - tensorflow-gpu >=2.5.0
+    - svglib 
+    - scipy >=1.5.4
+    - scikit-learn >=0.24.1
+    - pyyaml
+    - multimethod
+    - scienceplots
+  run:
+    - python >=3.10
+    - numpy >=1.19.2
+    - torchvision
+    - tqdm
+    - pytorch >=2.0.0
+    - matplotlib
+    - tensorflow-gpu >=2.5.0
+    - svglib 
+    - scipy >=1.5.4
+    - scikit-learn >=0.24.1
+    - pyyaml
+    - multimethod
+    - scienceplots
+
+about:
+  home: https://github.com/JeremieMelo/pytorch-onn
+  license: MIT
+  summary: A library for python/pytorch ONN training
+
+extra:
+  recipe-maintainers:
+    - jiaqigu

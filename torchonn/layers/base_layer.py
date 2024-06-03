@@ -27,6 +27,9 @@ __all__ = [
     "build_conv_layer",
     "build_norm_layer",
     "build_activation_layer",
+    "convert_linear_layer",
+    "convert_conv_layer",
+    "convert_layer",
 ]
 
 
@@ -586,3 +589,100 @@ def build_linear_layer(cfg: Optional[Dict], *args, **kwargs) -> nn.Module:
     layer = linear_layer(*args, **kwargs, **cfg_)
 
     return layer
+
+
+def convert_linear_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
+    if cfg is None:
+        cfg_ = dict(type="Linear")
+    else:
+        if not isinstance(cfg, dict):
+            raise TypeError("cfg must be a dict")
+        if "type" not in cfg:
+            raise KeyError('the cfg dict must contain the key "type"')
+        cfg_ = cfg.copy()
+
+    layer_type = cfg_.pop("type")
+
+    device = next(ref_layer.parameters()).device
+
+    if inspect.isclass(layer_type):
+        assert hasattr(
+            layer_type, "from_layer"
+        ), f"{layer_type} does not have a from_layer method for conversion"
+        return layer_type.from_layer(ref_layer, **cfg_).to(device)
+
+    # Switch registry to the target scope. If `linear_layer` cannot be found
+    # in the registry, fallback to search `linear_layer` in the
+    # mmengine.MODELS.
+    with MODELS.switch_scope_and_registry(None) as registry:
+        linear_layer = registry.get(layer_type)
+    if linear_layer is None:
+        raise KeyError(
+            f"Cannot find {linear_layer} in registry under scope "
+            f"name {registry.scope}"
+        )
+    assert hasattr(
+        linear_layer, "from_layer"
+    ), f"{linear_layer} does not have a from_layer method for conversion"
+    layer = linear_layer.from_layer(ref_layer, **cfg_).to(device)
+    return layer
+
+
+def convert_conv_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
+    """Build convolution layer.
+
+    Args:
+        cfg (None or dict): The conv layer config, which should contain:
+            - type (str): Layer type.
+            - layer args: Args needed to instantiate an conv layer.
+        args (argument list): Arguments passed to the `__init__`
+            method of the corresponding conv layer.
+        kwargs (keyword arguments): Keyword arguments passed to the `__init__`
+            method of the corresponding conv layer.
+
+    Returns:
+        nn.Module: Created conv layer.
+    """
+    if cfg is None:
+        cfg_ = dict(type="Conv2d")
+    else:
+        if not isinstance(cfg, dict):
+            raise TypeError("cfg must be a dict")
+        if "type" not in cfg:
+            raise KeyError('the cfg dict must contain the key "type"')
+        cfg_ = cfg.copy()
+
+    layer_type = cfg_.pop("type")
+
+    device = next(ref_layer.parameters()).device
+
+    if inspect.isclass(layer_type):
+        assert hasattr(
+            layer_type, "from_layer"
+        ), f"{layer_type} does not have a from_layer method for conversion"
+        return layer_type.from_layer(ref_layer, **cfg_).to(device)
+    # Switch registry to the target scope. If `conv_layer` cannot be found
+    # in the registry, fallback to search `conv_layer` in the
+    # mmengine.MODELS.
+    with MODELS.switch_scope_and_registry(None) as registry:
+        conv_layer = registry.get(layer_type)
+    if conv_layer is None:
+        raise KeyError(
+            f"Cannot find {conv_layer} in registry under scope "
+            f"name {registry.scope}"
+        )
+    assert hasattr(
+        conv_layer, "from_layer"
+    ), f"{conv_layer} does not have a from_layer method for conversion"
+    layer = conv_layer.from_layer(ref_layer, **cfg_).to(device)
+
+    return layer
+
+
+def convert_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
+    if isinstance(ref_layer, nn.Conv2d):
+        return convert_conv_layer(ref_layer, cfg)
+    elif isinstance(ref_layer, nn.Linear):
+        return convert_linear_layer(ref_layer, cfg)
+    else:
+        raise NotImplementedError(f"Conversion for {type(ref_layer)} is not supported")

@@ -1,7 +1,7 @@
 """
-Date: 2024-06-02 21:25:07
+Date: 2024-06-03 12:23:22
 LastEditors: Jiaqi Gu && jiaqigu@asu.edu
-LastEditTime: 2024-06-02 21:27:31
+LastEditTime: 2024-06-03 12:23:23
 FilePath: /pytorch-onn/unitest/test_models.py
 """
 
@@ -23,7 +23,7 @@ class CNN(torch.nn.Module):
         self.conv2 = torch.nn.Conv2d(8, 8, 3, bias=False)
         self.pool = torch.nn.AdaptiveAvgPool2d((5, 5))
         self.linear = torch.nn.Linear(200, 10, bias=False)
-    
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.conv2(x)
@@ -33,7 +33,6 @@ class CNN(torch.nn.Module):
         return x
 
 
-
 class TestModels(unittest.TestCase):
     def test_model_converter(self):
         device = torch.device("cuda:0")
@@ -41,8 +40,11 @@ class TestModels(unittest.TestCase):
         model = CNN().to(device)
         onn_model = ONNBaseModel.from_model(
             model,
-            conv_cfg=dict(type="MZIBlockConv2d", mode="phase", photodetect=False),
-            linear_cfg=dict(type="MZIBlockLinear", mode="usv", photodetect=False),
+            map_cfgs=dict(
+                Conv2d=dict(type="MZIBlockConv2d", mode="phase", photodetect=False),
+                Linear=dict(type="MZIBlockLinear", mode="usv", photodetect=False),
+            ),
+            verbose=True,
         )
         x = torch.randn(1, 3, 8, 8, device=device)
         y = model(x)

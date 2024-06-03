@@ -21,6 +21,7 @@ from torchonn.layers.base_layer import (
     build_conv_layer,
     build_linear_layer,
     build_norm_layer,
+    convert_layer,
 )
 
 __all__ = [
@@ -150,42 +151,26 @@ class ONNBaseModel(nn.Module):
     def from_model(
         cls,
         model: nn.Module,
-        conv_cfg=dict(type="MZIBlockConv2d"),
-        linear_cfg=dict(type="MZIBlockLinear"),
+        map_cfgs: Dict = dict(
+            Conv2d=dict(type="MZIBlockConv2d"),
+            Linear=dict(type="MZIBlockLinear"),
+        ),
         verbose: bool = False,
     ):
         new_model = deepcopy(model)
-        device = next(new_model.parameters()).device
-        conv_type = conv_cfg["type"]
-        linear_type = linear_cfg["type"]
-        conv_cfg.pop("type")
-        linear_cfg.pop("type")
-        conv_cfg = conv_cfg.copy()
 
         def replace_module(module):
             for name, child in module.named_children():
-                if isinstance(child, nn.Conv2d):
-                    with MODELS.switch_scope_and_registry(None) as registry:
-                        conv_layer = registry.get(conv_type)
-                        if conv_layer is not None:
-                            setattr(
-                                module,
-                                name,
-                                conv_layer.from_layer(child, **conv_cfg).to(device),
-                            )
-                            if verbose:
-                                logger.info(f"replaced {name} with {conv_type}")
-                elif isinstance(child, nn.Linear):
-                    with MODELS.switch_scope_and_registry(None) as registry:
-                        linear_layer = registry.get(linear_type)
-                        if linear_layer is not None:
-                            setattr(
-                                module,
-                                name,
-                                linear_layer.from_layer(child, **linear_cfg).to(device),
-                            )
-                            if verbose:
-                                logger.info(f"replaced {name} with {linear_type}")
+                src_layer_type = child.__class__.__name__
+                cfg = map_cfgs.get(src_layer_type, None)
+                if cfg is not None:
+                    new_layer = convert_layer(child, cfg)
+                    setattr(module, name, new_layer)
+                    if verbose:
+                        logger.info(
+                            f"Convert {name} from {src_layer_type} to {cfg['type']}"
+                        )
+
                 else:
                     replace_module(child)
 

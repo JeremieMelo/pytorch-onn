@@ -68,6 +68,7 @@ CUDA-backed fast GPU support, optimized highly-parallel tensorized processing, v
 - [pyutils](https://github.com/JeremieMelo/pyutility) >= 0.0.2
 - Others are listed in requirements.txt
 - GPU model training requires NVIDIA GPUs and compatible CUDA
+- GCC >= 9
 
 #### Get the PyTorch-ONN Source
 ```bash
@@ -79,9 +80,13 @@ git clone https://github.com/JeremieMelo/pytorch-onn.git
 cd pytorch-onn
 python3 setup.py install --user clean
 ```
-or
+or using the shell script
 ```bash
 ./setup.sh
+```
+or using conda with mambabuild for fast build
+```bash
+conda mambabuild .
 ```
 
 ## Usage

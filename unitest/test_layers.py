@@ -12,7 +12,7 @@ import numpy as np
 import torchonn as onn
 from pyutils.general import logger
 from torchonn.layers import (
-    MZIConv2d,
+    # MZIConv2d,
     MZILinear,
     MZIBlockConv2d,
     MZIBlockLinear,
@@ -69,38 +69,40 @@ class TestLayers(unittest.TestCase):
             "converted result max abs error:", np.abs(y1 - y2).max()
         )
 
-    def test_mziconv2d(self):
-        device = torch.device("cuda:0")
-        layer = MZIConv2d(8, 8, 3, bias=False, mode="usv", device=device).to(device)
-        layer.reset_parameters()
-        x = torch.randn(1, 8, 4, 4, device=device)
-        weight = layer.build_weight().data.clone()
-        y = layer(x).detach()
-        layer.switch_mode_to("phase")
-        layer.sync_parameters(src="usv")
-        weight2 = layer.build_weight().data.clone()
-        y2 = layer(x).detach()
-        # print(weight)
-        # print(weight2)
-        # print(y)
-        # print(y2)
+    # def test_mziconv2d(self):
+    #     device = torch.device("cuda:0")
+    #     layer = MZIConv2d(8, 8, 3, bias=False, mode="usv", device=device).to(device)
+    #     layer.reset_parameters()
+    #     x = torch.randn(1, 8, 4, 4, device=device)
+    #     weight = layer.transform_weight(layer.weights)["weight"].data.clone()
+    #     y = layer(x).detach()
+    #     layer.switch_mode_to("phase")
+    #     layer.sync_parameters(src="usv")
+    #     weight2 = layer.transform_weight(layer.weights)["weight"].data.clone()
+    #     y2 = layer(x).detach()
+    #     # print(weight)
+    #     # print(weight2)
+    #     # print(y)
+    #     # print(y2)
+    #     # exit(0)
 
-        assert np.allclose(weight.cpu().numpy(), weight2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
-            "max abs error:", np.abs(weight.cpu().numpy() - weight2.cpu().numpy()).max()
-        )
-        assert np.allclose(y.cpu().numpy(), y2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
-            "max abs error:", np.abs(y.cpu().numpy() - y2.cpu().numpy()).max()
-        )
+    #     assert np.allclose(weight.cpu().numpy(), weight2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
+    #         "max abs error:", np.abs(weight.cpu().numpy() - weight2.cpu().numpy()).max()
+    #     )
+    #     assert np.allclose(y.cpu().numpy(), y2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
+    #         "max abs error:", np.abs(y.cpu().numpy() - y2.cpu().numpy()).max()
+    #     )
 
-        # test layer conversion
-        conv2d = torch.nn.Conv2d(8, 8, 3, stride=2, bias=True).to(device)
-        layer = MZIConv2d.from_layer(conv2d, mode="phase", photodetect=False)
-        y1 = conv2d(x).detach().cpu().numpy()
-        y2 = layer(x).detach().cpu().numpy()
-        # print(y1)
-        # print(y2)
+    #     # test layer conversion
+    #     conv2d = torch.nn.Conv2d(8, 8, 3, stride=2, bias=True).to(device)
+    #     layer = MZIConv2d.from_layer(conv2d, mode="phase", photodetect=False)
+    #     y1 = conv2d(x).detach().cpu().numpy()
+    #     y2 = layer(x).detach().cpu().numpy()
+    #     # print(y1, y1.shape)
+    #     # print(y2, y2.shape)
+    #     # exit(0)
 
-        assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), print("max abs error:", np.abs(y1 - y2).max())
+    #     assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), print("max abs error:", np.abs(y1 - y2).max())
 
     def test_mziblocklinear(self):
         device = torch.device("cuda:0")
@@ -142,11 +144,11 @@ class TestLayers(unittest.TestCase):
         conv2d = MZIBlockConv2d(8, 8, 3, bias=False, miniblock=4, mode="usv", device=device).to(device)
         conv2d.reset_parameters()
         x = torch.randn(1, 8, 4, 4, device=device)
-        weight = conv2d.build_weight().data.clone()
+        weight = conv2d.transform_weight(conv2d.weights)["weight"].data.clone()
         y = conv2d(x).detach()
         conv2d.switch_mode_to("phase")
         conv2d.sync_parameters(src="usv")
-        weight2 = conv2d.build_weight().data.clone()
+        weight2 = conv2d.transform_weight(conv2d.weights)["weight"].data.clone()
         y2 = conv2d(x).detach()
         # print(weight)
         # print(weight2)

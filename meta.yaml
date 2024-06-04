@@ -1,4 +1,5 @@
 {% set version = "0.0.8" %}
+{% set build = 0 %}
 
 package:
   name: torchonn
@@ -6,17 +7,17 @@ package:
 
 source:
   path: .
+  git_rev: v0.0.8
+  git_url: https://github.com/JeremieMelo/pytorch-onn.git
 
 build:
-  number: 0
-  # skip: True  # [win]
-  # noarch: python
-  # script_env:
-  #   - PYTHON=
+  number: {{ build }}
+  noarch: python
+  script: {{ PYTHON }} setup.py install --user clean
 
-test:
-  imports:
-    - torchonn
+# test:
+#   imports:
+#     - torchonn
 
 requirements:
   # host:
@@ -25,32 +26,38 @@ requirements:
     - python=3.10
     - pip >=21.0.1
     - setuptools >=52.0.0
-    # - numpy >=1.19.2
+    - numpy >=1.19.2
     - torchvision
     - tqdm
-    - pytorch >=2.0.0
+    - pytorch=2.3.0
+    - pytorch-cuda=11.8
     - matplotlib
-    - tensorflow-gpu >=2.5.0
+    - tensorflow-gpu=2.14.0
     - svglib 
     - scipy >=1.5.4
     - scikit-learn >=0.24.1
     - pyyaml
     - multimethod
     - scienceplots
+    - mmengine=0.10.4
+    - mmcv=2.1.0
   run:
     - python >=3.10
     - numpy >=1.19.2
     - torchvision
     - tqdm
-    - pytorch >=2.0.0
+    - pytorch=2.3.0
+    - pytorch-cuda=11.8
     - matplotlib
-    - tensorflow-gpu >=2.5.0
+    - tensorflow-gpu=2.14.0
     - svglib 
     - scipy >=1.5.4
     - scikit-learn >=0.24.1
     - pyyaml
     - multimethod
     - scienceplots
+    - mmengine=0.10.4
+    - mmcv=2.1.0
 
 about:
   home: https://github.com/JeremieMelo/pytorch-onn

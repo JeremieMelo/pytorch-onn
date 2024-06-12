@@ -102,7 +102,7 @@ import torchonn as onn
 from torchonn.models import ONNBaseModel
 
 class ONNModel(ONNBaseModel):
-    def __init__(self, device=torch.device("cuda:0)):
+    def __init__(self, device=torch.device("cuda:0")):
         super().__init__(device=device)
         self.conv = onn.layers.MZIBlockConv2d(
             in_channels=1,
@@ -140,7 +140,39 @@ class ONNModel(ONNBaseModel):
         x = self.linear(x)
         return x
 ```
+Or you can simply convert a standard PyTorch model to its optical analog version
+```python
+import torch 
+from torchonn.models.base_model import ONNBaseModel
 
+class CNN(torch.nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.conv1 = torch.nn.Conv2d(3, 8, 3, bias=False)
+        self.conv2 = torch.nn.Conv2d(8, 8, 3, bias=False)
+        self.pool = torch.nn.AdaptiveAvgPool2d((5, 5))
+        self.linear = torch.nn.Linear(200, 10, bias=False)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.pool(x)
+        x = x.view(x.size(0), -1)
+        x = self.linear(x)
+        return x
+
+model = CNN().to(device)
+## the from_model class method can convert NN to ONN given mapping configs
+onn_model = ONNBaseModel.from_model(
+    model,
+    map_cfgs=dict(
+        Conv2d=dict(type="MZIBlockConv2d", mode="usv", photodetect=False),
+        Linear=dict(type="MZIBlockLinear", mode="usv", photodetect=False),
+    ),
+    verbose=True,
+)
+
+```
 ## Features
 - Support pytorch training MZI-based ONNs. Support MZI-based Linear, Conv2d, BlockLinear, and BlockConv2d. Support `weight`, `usv`, `phase` modes and their conversion.
 - Support phase **quantization** and **non-ideality injection**, including phase shifter gamma error, phase variations, and crosstalk.

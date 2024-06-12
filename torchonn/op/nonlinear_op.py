@@ -1,11 +1,22 @@
-import logging
+'''
+Date: 2024-06-12 10:48:00
+LastEditors: Jiaqi Gu && jiaqigu@asu.edu
+LastEditTime: 2024-06-12 10:48:00
+FilePath: /pytorch-onn/torchonn/op/nonlinear_op.py
+'''
+"""
+Date: 2024-06-12 00:51:51
+LastEditors: Jiaqi Gu && jiaqigu@asu.edu
+LastEditTime: 2024-06-12 00:53:14
+FilePath: /pytorch-onn/torchonn/op/nonlinear_op.py
+"""
+
 import os
 import sys
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
 )
-import functools
 
 import numpy as np
 import torch
@@ -63,7 +74,6 @@ if __name__ == "__main__":
     tia_gain = torch.randn(N, device=device).abs() + 0.1
     responsivity = torch.randn(N, device=device).abs() + 0.1
     V_pi = torch.randn(N, device=device).abs() + 0.1
-
     for _ in range(10):
         mzi_nonlinearity_op(x, alpha, phase_bias, tia_gain, responsivity, V_pi)
     torch.cuda.synchronize()

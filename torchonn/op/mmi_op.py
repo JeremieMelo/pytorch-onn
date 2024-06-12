@@ -2,8 +2,8 @@
 Description: 
 Author: Jiaqi Gu (jiaqigu@asu.edu)
 Date: 2023-10-02 02:57:22
-LastEditors: ScopeX-ASU jiaqigu@asu.edu
-LastEditTime: 2023-10-02 02:57:22
+LastEditors: Jiaqi Gu && jiaqigu@asu.edu
+LastEditTime: 2024-06-12 01:10:29
 '''
 """
 Description: 
@@ -62,26 +62,28 @@ def multiport_mmi(
 
 # @torch.jit.script
 def multiport_mmi_with_ps(
-    n_port: int = 2, ps_loc: str = "before", device: torch.device = torch.device("cuda")
+    n_port: int = 2, phases: Tensor=None, ps_loc: str = "before", device: torch.device = torch.device("cuda")
 ):
     """N by N mmi with N ps at the input ports. Operation Principles for Optical Switches Based on Two Multimode Interference Couplers, JLT 2012
 
     Args:
         n_port (int): Number of input/output ports. Defaults to 2.
+        phases (Tensor): Phase shifters at the input ports. Defaults to None. Shape can be batched phases [..., n_port]
+        Return: [..., n_port, n_port] complex transmission matrix. It might be batched if ps is batched
     """
     x = multiport_mmi(n_port, device=device)
     # angle = x.sub(0.5).sub_(y.sub(0.5).mul_(sign)).square_().mul_(np.pi / (-4 * n_port))
     # x = torch.complex(angle.cos(), angle.sin()).mul_(sign.mul_((1 / n_port) ** 0.5))
-    angle = torch.randn(n_port, device=device)
-    ps = torch.exp(1j * angle * np.pi)
+    # angle = torch.randn(n_port, device=device)
+    # ps = torch.exp(1j * angle * np.pi)
     # angle[1::2] += 1
     
     # ps = torch.complex(angle.cos(), angle.sin())
-
-    if ps_loc == "before":
-        x = x.mul(ps.unsqueeze(0))
-    elif ps_loc == "after":
-        x = ps.unsqueeze(1).mul(x)
+    if phases is not None:
+        if ps_loc == "before":
+            x = x.mul(phases.unsqueeze(-2))
+        elif ps_loc == "after":
+            x = phases.unsqueeze(-1).mul(x)
     return x
 
 

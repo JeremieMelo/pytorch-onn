@@ -77,8 +77,12 @@ git clone https://github.com/JeremieMelo/pytorch-onn.git
 
 #### Install PyTorch-ONN
 ```bash
+pip install torchonn
+```
+or compile the cloned github repo if you want to modify source codes
+```bash
 cd pytorch-onn
-python3 setup.py install --user clean
+python3 setup.py install clean
 ```
 or using the shell script
 ```bash

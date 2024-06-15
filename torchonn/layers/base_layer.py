@@ -6,6 +6,7 @@ FilePath: /pytorch-onn/torchonn/layers/base_layer.py
 """
 
 import inspect
+from sched import scheduler
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -16,7 +17,7 @@ from pyutils.general import logger
 from torch import Tensor, nn
 from torch.nn.modules.utils import _pair
 from torch.types import Device
-
+import torch.nn.functional as F
 from .utils import partition_chunks
 
 __all__ = [
@@ -63,6 +64,7 @@ class ONNBaseLayer(nn.Module):
         raise NotImplementedError
 
     def pack_weights(self) -> None:
+        ## key here should match the src_name for weight_transform
         ## e.g, self.weights = {"weight": self.weight}
         raise NotImplementedError
 
@@ -221,6 +223,7 @@ class ONNBaseLayer(nn.Module):
         if weights is None:
             weights = self.weights
         new_weights = {}
+        
         for src_name, weight in weights.items():
             if src_name in self.transform_registry:
                 for dst_name, transforms in self.transform_registry[src_name].items():
@@ -260,6 +263,29 @@ class ONNBaseLayer(nn.Module):
 
     def _output_transform(self, x: Tensor) -> Tensor:
         return x
+
+    def map_layer(self, target: Tensor, param_list: List, build_weight_fn: Callable, mode: str="regression", num_steps: int = 1000, optimizer: str="Adam", lr: float=1e-3, verbose:bool=False) -> None:
+        if mode == "regression":
+            if optimizer == "Adam":
+                optimizer = torch.optim.Adam(param_list, lr=lr)
+            else:
+                raise NotImplementedError
+    
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1e-2*lr)
+            
+            for i in range(num_steps):
+                optimizer.zero_grad()
+                weight = build_weight_fn()
+                        
+                loss = F.mse_loss(target, weight)
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
+                if verbose and (i % 500 == 0 or i == num_steps - 1):
+                    logger.info(f"Sync weight to phase: step = {i:5d}, mse = {loss.item():.2e}")
+            optimizer.zero_grad()
+        else:
+            raise NotImplementedError
 
     def forward(self, x: Tensor) -> Tensor:
         ## preprocess input

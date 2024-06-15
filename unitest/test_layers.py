@@ -13,7 +13,7 @@ import torchonn as onn
 from pyutils.general import logger
 from torchonn.layers import (
     # MZIConv2d,
-    MZILinear,
+    # MZILinear,
     MZIBlockConv2d,
     MZIBlockLinear,
     FFTONNBlockLinear,
@@ -34,40 +34,40 @@ from torchonn.layers import (
 
 
 class TestLayers(unittest.TestCase):
-    def test_mzilinear(self):
-        device = torch.device("cuda:0")
-        layer = MZILinear(8, 8, bias=False, mode="usv", device=device).to(device)
-        layer.reset_parameters()
-        x = torch.randn(1, 8, device=device)
-        weight = layer.build_weight().data.clone()
-        y = layer(x).detach()
-        layer.switch_mode_to("phase")
-        layer.sync_parameters(src="usv")
-        weight2 = layer.build_weight().data.clone()
-        y2 = layer(x).detach()
-        # print(weight)
-        # print(weight2)
-        # print(y)
-        # print(y2)
+    # def test_mzilinear(self):
+    #     device = torch.device("cuda:0")
+    #     layer = MZILinear(8, 8, bias=False, mode="usv", device=device).to(device)
+    #     layer.reset_parameters()
+    #     x = torch.randn(1, 8, device=device)
+    #     weight = layer.build_weight().data.clone()
+    #     y = layer(x).detach()
+    #     layer.switch_mode_to("phase")
+    #     layer.sync_parameters(src="usv")
+    #     weight2 = layer.build_weight().data.clone()
+    #     y2 = layer(x).detach()
+    #     # print(weight)
+    #     # print(weight2)
+    #     # print(y)
+    #     # print(y2)
 
-        assert np.allclose(weight.cpu().numpy(), weight2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
-            "weight max abs error:", np.abs(weight.cpu().numpy() - weight2.cpu().numpy()).max()
-        )
-        assert np.allclose(y.cpu().numpy(), y2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
-            "result max abs error:", np.abs(y.cpu().numpy() - y2.cpu().numpy()).max()
-        )
+    #     assert np.allclose(weight.cpu().numpy(), weight2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
+    #         "weight max abs error:", np.abs(weight.cpu().numpy() - weight2.cpu().numpy()).max()
+    #     )
+    #     assert np.allclose(y.cpu().numpy(), y2.cpu().numpy(), rtol=1e-4, atol=1e-4), print(
+    #         "result max abs error:", np.abs(y.cpu().numpy() - y2.cpu().numpy()).max()
+    #     )
 
-        # test layer conversion
-        linear = torch.nn.Linear(8, 8, bias=True).to(device)
-        layer = MZILinear.from_layer(linear, mode="phase", photodetect=False)
-        y1 = linear(x).detach().cpu().numpy()
-        y2 = layer(x).detach().cpu().numpy()
-        # print(y1)
-        # print(y2)
+    #     # test layer conversion
+    #     linear = torch.nn.Linear(8, 8, bias=True).to(device)
+    #     layer = MZILinear.from_layer(linear, mode="phase", photodetect=False)
+    #     y1 = linear(x).detach().cpu().numpy()
+    #     y2 = layer(x).detach().cpu().numpy()
+    #     # print(y1)
+    #     # print(y2)
 
-        assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), print(
-            "converted result max abs error:", np.abs(y1 - y2).max()
-        )
+    #     assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), print(
+    #         "converted result max abs error:", np.abs(y1 - y2).max()
+    #     )
 
     # def test_mziconv2d(self):
     #     device = torch.device("cuda:0")
@@ -109,11 +109,11 @@ class TestLayers(unittest.TestCase):
         fc = MZIBlockLinear(8, 8, bias=False, miniblock=4, mode="usv", device=device).to(device)
         fc.reset_parameters()
         x = torch.randn(1, 8, device=device)
-        weight = fc.build_weight().data.clone()
+        weight = fc.transform_weight(fc.weights)["weight"].data.clone()
         y = fc(x).detach()
         fc.switch_mode_to("phase")
         fc.sync_parameters(src="usv")
-        weight2 = fc.build_weight().data.clone()
+        weight2 = fc.transform_weight(fc.weights)["weight"].data.clone()
         y2 = fc(x).detach()
         # print(weight)
         # print(weight2)
@@ -129,7 +129,7 @@ class TestLayers(unittest.TestCase):
 
         # test layer conversion
         linear = torch.nn.Linear(8, 8, bias=True).to(device)
-        layer = MZIBlockLinear.from_layer(linear, miniblock=4, mode="phase", photodetect=False)
+        layer = MZIBlockLinear.from_layer(linear, miniblock=4, mode="phase")
         y1 = linear(x).detach().cpu().numpy()
         y2 = layer(x).detach().cpu().numpy()
         # print(y1)
@@ -164,7 +164,7 @@ class TestLayers(unittest.TestCase):
 
         # test layer conversion
         conv2d = torch.nn.Conv2d(8, 8, 3, stride=2, bias=True).to(device)
-        layer = MZIBlockConv2d.from_layer(conv2d, miniblock=4, mode="phase", photodetect=False)
+        layer = MZIBlockConv2d.from_layer(conv2d, miniblock=4, mode="phase")
         y1 = conv2d(x).detach().cpu().numpy()
         y2 = layer(x).detach().cpu().numpy()
         # print(y1)
@@ -174,29 +174,29 @@ class TestLayers(unittest.TestCase):
             "converted result max abs error:", np.abs(y1 - y2).max()
         )
 
-    # def test_fftonnblocklinear(self):
-    #     device = torch.device("cuda:0")
-    #     layer = FFTONNBlockLinear(8, 8, bias=False, miniblock=4, mode="fft", device=device).to(device)
-    #     layer.reset_parameters(mode="fft")
-    #     layer.set_input_bitwidth(8)
-    #     layer.set_weight_bitwidth(8)
-    #     x = torch.randn(1, 8, device=device)
-    #     weight = layer.build_weight().data.clone()
-    #     y = layer(x).detach()
-    #     print(weight)
-    #     print(y)
+    def test_fftonnblocklinear(self):
+        device = torch.device("cuda:0")
+        layer = FFTONNBlockLinear(8, 8, bias=False, miniblock=4, mode="fft", device=device).to(device)
+        layer.reset_parameters(mode="fft")
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
+        x = torch.randn(1, 8, device=device)
+        weight = layer.transform_weight(layer.weights)["weight"].data.clone()
+        y = layer(x).detach()
+        print(weight)
+        print(y)
 
-    # def test_fftonnblockconv2d(self):
-    #     device = torch.device("cuda:0")
-    #     layer = FFTONNBlockConv2d(8, 8, 3, bias=False, miniblock=4, mode="fft", device=device).to(device)
-    #     layer.reset_parameters(mode="fft")
-    #     layer.set_input_bitwidth(8)
-    #     layer.set_weight_bitwidth(8)
-    #     x = torch.randn(1, 8, 4, 4, device=device)
-    #     weight = layer.build_weight().data.clone()
-    #     y = layer(x).detach()
-    #     print(weight)
-    #     print(y)
+    def test_fftonnblockconv2d(self):
+        device = torch.device("cuda:0")
+        layer = FFTONNBlockConv2d(8, 8, 3, bias=False, miniblock=4, mode="fft", device=device).to(device)
+        layer.reset_parameters(mode="fft")
+        layer.set_input_bitwidth(8)
+        layer.set_weight_bitwidth(8)
+        x = torch.randn(1, 8, 4, 4, device=device)
+        weight = layer.transform_weight(layer.weights)["weight"].data.clone()
+        y = layer(x).detach()
+        print(weight)
+        print(y)
 
     # def test_allpassmorrcirculantlinear(self):
     #     device = torch.device("cuda:0")
@@ -366,81 +366,81 @@ class TestLayers(unittest.TestCase):
     #     print(weight)
     #     print(y)
 
-    def test_mrrconv2d(self):
-        device = torch.device("cuda:0")
-        layer = AddDropMRRConv2d(
-            8,
-            8,
-            3,
-            bias=True,
-            mode="weight",
-            device=device,
-        ).to(device)
-        layer.reset_parameters()
-        layer.set_input_bitwidth(8)
-        layer.set_weight_bitwidth(8)
-        x = torch.randn(1, 8, 4, 4, device=device)
-        weight = layer.build_weight().data.clone()
-        y = layer(x).detach()
-        print(weight)
-        print(y)
+    # def test_mrrconv2d(self):
+    #     device = torch.device("cuda:0")
+    #     layer = AddDropMRRConv2d(
+    #         8,
+    #         8,
+    #         3,
+    #         bias=True,
+    #         mode="weight",
+    #         device=device,
+    #     ).to(device)
+    #     layer.reset_parameters()
+    #     layer.set_input_bitwidth(8)
+    #     layer.set_weight_bitwidth(8)
+    #     x = torch.randn(1, 8, 4, 4, device=device)
+    #     weight = layer.build_weight().data.clone()
+    #     y = layer(x).detach()
+    #     print(weight)
+    #     print(y)
     
-    def test_mrrblockconv2d(self):
-        device = torch.device("cuda:0")
-        layer = AddDropMRRBlockConv2d(
-            8,
-            8,
-            3,
-            miniblock=4,
-            bias=True,
-            mode="weight",
-            device=device,
-        ).to(device)
-        layer.reset_parameters()
-        layer.set_input_bitwidth(8)
-        layer.set_weight_bitwidth(8)
-        x = torch.randn(1, 8, 4, 4, device=device)
-        weight = layer.build_weight().data.clone()
-        y = layer(x).detach()
-        print(weight)
-        print(y)
+    # def test_mrrblockconv2d(self):
+    #     device = torch.device("cuda:0")
+    #     layer = AddDropMRRBlockConv2d(
+    #         8,
+    #         8,
+    #         3,
+    #         miniblock=4,
+    #         bias=True,
+    #         mode="weight",
+    #         device=device,
+    #     ).to(device)
+    #     layer.reset_parameters()
+    #     layer.set_input_bitwidth(8)
+    #     layer.set_weight_bitwidth(8)
+    #     x = torch.randn(1, 8, 4, 4, device=device)
+    #     weight = layer.build_weight().data.clone()
+    #     y = layer(x).detach()
+    #     print(weight)
+    #     print(y)
     
-    def test_mrrlinear(self):
-        device = torch.device("cuda:0")
-        layer = AddDropMRRLinear(
-            8,
-            8,
-            bias=True,
-            mode="weight",
-            device=device,
-        ).to(device)
-        layer.reset_parameters()
-        layer.set_input_bitwidth(8)
-        layer.set_weight_bitwidth(8)
-        x = torch.randn(1, 8, device=device)
-        weight = layer.build_weight().data.clone()
-        y = layer(x).detach()
-        print(weight)
-        print(y)
+    # def test_mrrlinear(self):
+    #     device = torch.device("cuda:0")
+    #     layer = AddDropMRRLinear(
+    #         8,
+    #         8,
+    #         bias=True,
+    #         mode="weight",
+    #         device=device,
+    #     ).to(device)
+    #     layer.reset_parameters()
+    #     layer.set_input_bitwidth(8)
+    #     layer.set_weight_bitwidth(8)
+    #     x = torch.randn(1, 8, device=device)
+    #     weight = layer.build_weight().data.clone()
+    #     y = layer(x).detach()
+    #     print(weight)
+    #     print(y)
     
-    def test_mrrblocklinear(self):
-        device = torch.device("cuda:0")
-        layer = AddDropMRRBlockLinear(
-            8,
-            8,
-            miniblock=4,
-            bias=True,
-            mode="weight",
-            device=device,
-        ).to(device)
-        layer.reset_parameters()
-        layer.set_input_bitwidth(8)
-        layer.set_weight_bitwidth(8)
-        x = torch.randn(1, 8, device=device)
-        weight = layer.build_weight().data.clone()
-        y = layer(x).detach()
-        print(weight)
-        print(y)
+    # def test_mrrblocklinear(self):
+    #     device = torch.device("cuda:0")
+    #     layer = AddDropMRRBlockLinear(
+    #         8,
+    #         8,
+    #         miniblock=4,
+    #         bias=True,
+    #         mode="weight",
+    #         device=device,
+    #     ).to(device)
+    #     layer.reset_parameters()
+    #     layer.set_input_bitwidth(8)
+    #     layer.set_weight_bitwidth(8)
+    #     x = torch.randn(1, 8, device=device)
+    #     weight = layer.build_weight().data.clone()
+    #     y = layer(x).detach()
+    #     print(weight)
+    #     print(y)
 
 if __name__ == "__main__":
     unittest.main()

@@ -223,7 +223,7 @@ class TrainableButterfly(nn.Module):
 
     def train_fft(self):
         inverse = self.reverse
-        logger.info(f"Start initializing {'OFFT' if inverse == False else 'OIFFT'}")
+        logger.info(f"Start initializing TrainableButterfly to {'OFFT' if inverse == False else 'OIFFT'}")
 
         grad_state = self.phases.requires_grad
         perm_state = self.bit_reversal
@@ -259,8 +259,8 @@ class TrainableButterfly(nn.Module):
                 loss.backward()
                 optimizer.step()
             error = output.sub(target).norm(p=2).square() / target.norm(p=2).square()
-            print(
-                f"Finish initializing {'OFFT' if inverse == False else 'OIFFT'}, error = {error.data.item()}"
+            logger.info(
+                f"Finish initializing TrainableButterfly to {'OFFT' if inverse == False else 'OIFFT'}, error = {error.data.item()}"
             )
         self.phases.requires_grad_(grad_state)
         self.bit_reversal = perm_state
@@ -290,7 +290,7 @@ class TrainableButterfly(nn.Module):
         return torch.tensor([[t, k * 1j], [k * 1j, t]], device=self.device, dtype=torch.cfloat)
 
     def build_weight(self, phases: Optional[Tensor] = None) -> Tensor:
-        phases = phases or self.phases
+        phases = phases is not None or self.phases
         if self.phase_quantizer is not None:
             phases = self.phase_quantizer(phases)
 

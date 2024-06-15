@@ -13,13 +13,10 @@ import torch
 import torch.nn.functional as F
 from mmengine.registry import MODELS
 from pyutils.compute import gen_gaussian_noise
-from pyutils.general import logger, print_stat
+from pyutils.general import logger
 from pyutils.quant.lsq import ActQuantizer_LSQ
 from torch import Tensor, nn
 from torch.nn import Parameter, init
-from torch.nn.modules.utils import _pair
-from torch.types import Device, _size
-from .utils import merge_chunks, partition_chunks
 
 from torchonn.layers.base_layer import ONNBaseLinear
 from torchonn.op.matrix_parametrization import RealUnitaryDecomposerBatch
@@ -32,6 +29,8 @@ from torchonn.op.mzi_op import (
     vector_to_upper_triangle,
     voltage_to_phase,
 )
+
+from .utils import merge_chunks, partition_chunks
 
 __all__ = [
     "MZIBlockLinear",
@@ -58,7 +57,7 @@ class MZIBlockLinear(ONNBaseLinear):
         out_bit=32,
         v_max=10.8,
         v_pi=4.36,
-        photodetect=False,
+        photodetect="coherent",
         decompose_alg="clements",
         device=torch.device("cpu"),
     )
@@ -109,6 +108,9 @@ class MZIBlockLinear(ONNBaseLinear):
             f"Mode not supported. Expected one from (weight, usv, phase, voltage) but got {self.mode}."
         )
         self.gamma = np.pi / self.v_pi**2
+        assert self.photodetect in ["coherent"], logger.error(
+            f"Photodetect mode {self.photodetect} not implemented. only 'coherent' is supported."
+        )
 
     def build_parameters(self, mode: str = "weight") -> None:
         ## weight mode
@@ -607,7 +609,6 @@ class MZIBlockLinear(ONNBaseLinear):
     def _weight_transform(
         self, weights: Dict, update_list: set = {"phase_U", "phase_S", "phase_V"}
     ) -> Tensor:
-
         if self.mode == "weight":
             weight = weights
         elif self.mode == "usv":
@@ -656,8 +657,6 @@ class MZIBlockLinear(ONNBaseLinear):
         return weight
 
     def _output_transform(self, x: Tensor) -> Tensor:
-        if self.photodetect:
-            x = x.square()
         if self.out_bit < 16:
             x = self.output_quantizer(x)
         return x

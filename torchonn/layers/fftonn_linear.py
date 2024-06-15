@@ -5,39 +5,55 @@ Date: 2021-11-27 19:02:52
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-11-27 22:17:35
 """
-from typing import Any, Dict, Optional, Tuple, Union
+
+from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
-from pyutils.compute import gen_gaussian_noise, get_complex_energy, merge_chunks
-from pyutils.general import logger, print_stat
-from pyutils.quantize import input_quantize_fn, weight_quantize_fn
-from torch import Tensor
+from mmengine.registry import MODELS
+from pyutils.compute import gen_gaussian_noise
+from pyutils.general import logger
+from pyutils.quant.lsq import ActQuantizer_LSQ
+from torch import Tensor, nn
 from torch.nn import Parameter, init
-from torch.types import Device
-from torchonn.layers.base_layer import ONNBaseLayer
+
+from torchonn.layers.base_layer import ONNBaseLinear
 from torchonn.op.butterfly_op import TrainableButterfly
 from torchonn.op.mzi_op import PhaseQuantizer
+
+from .utils import merge_chunks, partition_chunks
 
 __all__ = [
     "FFTONNBlockLinear",
 ]
 
 
-class FFTONNBlockLinear(ONNBaseLayer):
+@MODELS.register_module()
+class FFTONNBlockLinear(ONNBaseLinear):
     """
     Butterfly blocking Linear layer.
     J. Gu, et al., "Towards Area-Efficient Optical Neural Networks: An FFT-based Architecture," ASP-DAC 2020.
     https://ieeexplore.ieee.org/document/9045156
     """
 
-    __constants__ = ["in_features", "out_features"]
-    in_features: int
-    out_features: int
-    miniblock: int
-    weight: Tensor
+    ## default configs
+    default_cfgs = dict(
+        miniblock=(
+            1,
+            1,
+            4,
+            4,
+        ),  # [#tiles, pe per tile, row, col] # i.e., [R, C, k1, k2]
+        mode="fft",
+        w_bit=32,
+        in_bit=32,
+        out_bit=32,
+        v_max=10.8,
+        v_pi=4.36,
+        photodetect="coherent",
+        device=torch.device("cpu"),
+    )
     __mode_list__ = ["fft", "hadamard", "zero_bias", "trainable"]
 
     def __init__(
@@ -45,70 +61,19 @@ class FFTONNBlockLinear(ONNBaseLayer):
         in_features: int,
         out_features: int,
         bias: bool = False,
-        miniblock: int = 4,
-        mode: str = "fft",
-        photodetect: bool = True,
-        device: Device = torch.device("cpu"),
+        **cfgs,
     ):
-        super().__init__(device=device)
-        self.in_features = in_features
-        self.out_features = out_features
-        self.miniblock = miniblock
-        self.grid_dim_x = int(np.ceil(self.in_features / miniblock))
-        self.grid_dim_y = int(np.ceil(self.out_features / miniblock))
-        self.in_features_pad = self.grid_dim_x * miniblock
-        self.out_features_pad = self.grid_dim_y * miniblock
-        self.mode = mode
-        assert mode in self.__mode_list__, logger.error(
-            f"Mode not supported. Expected one from {self.__mode_list__} but got {mode}."
+        super().__init__()
+        self.load_cfgs(
+            in_features=in_features,
+            out_features=out_features,
+            **cfgs,
         )
-        self.v_max = 10.8
-        self.v_pi = 4.36
-        self.gamma = np.pi / self.v_pi**2
-        self.w_bit = 32
-        self.in_bit = 32
-        self.photodetect = photodetect
-
-        crosstalk_filter_size = 3
-
-        ### quantization tool
-        self.input_quantizer = input_quantize_fn(self.in_bit, alg="dorefa", device=self.device)
-        self.phase_U_quantizer = PhaseQuantizer(
-            self.w_bit,
-            self.v_pi,
-            self.v_max,
-            gamma_noise_std=0,
-            crosstalk_factor=0,
-            crosstalk_filter_size=crosstalk_filter_size,
-            random_state=0,
-            mode="butterfly",
-            device=self.device,
-        )
-        self.phase_V_quantizer = PhaseQuantizer(
-            self.w_bit,
-            self.v_pi,
-            self.v_max,
-            gamma_noise_std=0,
-            crosstalk_factor=0,
-            crosstalk_filter_size=crosstalk_filter_size,
-            random_state=0,
-            mode="butterfly",
-            device=self.device,
-        )
-        # self.phase_S_quantizer = PhaseQuantizer(
-        #     self.w_bit,
-        #     self.v_pi,
-        #     self.v_max,
-        #     gamma_noise_std=0,
-        #     crosstalk_factor=0,
-        #     crosstalk_filter_size=crosstalk_filter_size,
-        #     random_state=0,
-        #     mode="diagonal",
-        #     device=self.device,
-        # )
 
         ### build trainable parameters
         self.build_parameters()
+        ### build transform
+        self.build_transform()
 
         ### default set to slow forward
         self.disable_fast_forward()
@@ -120,48 +85,75 @@ class FFTONNBlockLinear(ONNBaseLayer):
         self.set_crosstalk_factor(0)
 
         if bias:
-            self.bias = Parameter(torch.Tensor(out_features).to(self.device))
+            self.bias = Parameter(torch.zeros(out_features, device=self.device))
         else:
             self.register_parameter("bias", None)
 
         self.reset_parameters(mode=self.mode)
 
+    def load_cfgs(
+        self,
+        **cfgs,
+    ) -> None:
+        super().load_cfgs(**cfgs)
+
+        ## verify configs
+        assert self.mode in self.__mode_list__, logger.error(
+            f"Mode not supported. Expected one from {self.__mode_list__} but got {self.mode}."
+        )
+        self.gamma = np.pi / self.v_pi**2
+        assert self.miniblock[-1] == self.miniblock[-2], logger.error(
+            f"Currently only support square miniblock, but got {self.miniblock}."
+        )
+
+        assert self.photodetect in ["coherent"], logger.error(
+            f"Photodetect mode {self.photodetect} not implemented. only 'coherent' is supported."
+        )
+
     def build_parameters(self) -> None:
         self.weight = torch.zeros(
             self.grid_dim_y,
             self.grid_dim_x,
-            self.miniblock,
-            self.miniblock,
-            dtype=torch.cfloat,
+            *self.miniblock,
             device=self.device,
         )
         self.T = TrainableButterfly(
-            length=self.miniblock,
+            length=self.miniblock[-1],
             reverse=False,
             bit_reversal=False,
             enable_last_level_phase_shifter=True,
-            phase_quantizer=self.phase_U_quantizer,
             device=self.device,
         )
         self.S = Parameter(
-            torch.zeros(self.grid_dim_y, self.grid_dim_x, self.miniblock, dtype=torch.cfloat).to(self.device)
+            torch.zeros(
+                self.grid_dim_y, self.grid_dim_x, *self.miniblock[:-1], dtype=torch.cfloat
+            ).to(self.device)
         )  # complex frequency-domain weights
         self.Tr = TrainableButterfly(
-            length=self.miniblock,
+            length=self.miniblock[-1],
             reverse=True,
             bit_reversal=False,
             enable_last_level_phase_shifter=True,
-            phase_quantizer=self.phase_V_quantizer,
             device=self.device,
         )
 
-    @property
-    def U(self):
-        return self.Tr.build_weight()
+        param_groups = {
+            "phase_V": self.T.phases,
+            "phase_U": self.Tr.phases,
+            "S": self.S,
+        }
+        buffer_groups = {"weight": self.weight}
 
-    @property
-    def V(self):
-        return self.T.build_weight()
+        self.register_parameter_buffer(
+            param_groups=param_groups,
+            buffer_groups=buffer_groups,
+        )
+
+        self.pack_weights()
+
+    def pack_weights(self):
+        ## key is self.mode, which should match the src_name for weight_transform
+        self.weights = {self.mode: (self.Tr.phases, self.S, self.T.phases)}
 
     @property
     def phase_U(self):
@@ -173,17 +165,17 @@ class FFTONNBlockLinear(ONNBaseLayer):
 
     def reset_parameters(self, mode: Optional[str] = None) -> None:
         mode = mode or self.mode
-        W = init.kaiming_normal_(
-            torch.empty(
-                self.grid_dim_y,
-                self.grid_dim_x,
-                self.miniblock,
-                self.miniblock,
-                dtype=torch.cfloat,
-                device=self.device,
-            )
-        )
-        _, S, _ = torch.svd(W, compute_uv=False)
+        W = nn.Linear(
+            self.in_features,
+            self.out_features,
+        ).weight.data.to(self.device)
+        W = partition_chunks(W.flatten(1), self.weight.shape)
+        if self.device.type == "cpu":
+            S = torch.linalg.svdvals(W)
+        else:
+            S = torch.linalg.svdvals(
+                W, driver="gesvd"
+            )  # must use QR decomposition
         self.S.data.copy_(S)
 
         if mode == "zero_bias":
@@ -212,50 +204,69 @@ class FFTONNBlockLinear(ONNBaseLayer):
         if self.bias is not None:
             init.uniform_(self.bias, 0, 0)
 
-    @classmethod
-    def from_layer(
-        cls,
-        layer: nn.Linear,
-        miniblock: int = 4,
-        mode: str = "fft",
-        photodetect: bool = True,
-        verbose: bool = False,
-    ) -> nn.Module:
-        """Initialize from a nn.Linear layer. Weight mapping will be performed
+    def switch_mode_to(self, mode: str) -> None:
+        super().switch_mode_to(mode)
+        self.pack_weights()
 
-        Args:
-            miniblock (int, optional): miniblock size. Defaults to 4.
-            mode (str, optional): parametrization mode. Defaults to "fft".
-            photodetect (bool, optional): whether to use photodetect. Defaults to True.
-
-        Returns:
-            Module: a converted FFTONNBlockLinear module
-        """
-        assert isinstance(layer, nn.Linear), f"The conversion target must be nn.Linear, but got {type(layer)}."
-        in_features = layer.in_features
-        out_features = layer.out_features
-        bias = layer.bias is not None
-        device = layer.weight.data.device
-        instance = cls(
-            in_features=in_features,
-            out_features=out_features,
-            bias=bias,
-            miniblock=miniblock,
-            mode=mode,
-            photodetect=photodetect,
-            device=device,
-        ).to(device)
-        weight = instance.weight
-        tmp = torch.zeros(instance.out_features_pad, instance.in_features_pad, dtype=torch.cfloat, device=instance.device)
-        tmp.data.real[:out_features, :in_features].copy_(layer.weight)
-        instance.weight.data.copy_(
-            tmp.view(weight.shape[0], weight.shape[2], weight.shape[1], weight.shape[3]).permute(0, 2, 1, 3)
+    def build_transform(self) -> None:
+        ### quantization tool
+        self.input_quantizer = ActQuantizer_LSQ(
+            None,
+            device=self.device,
+            nbits=self.in_bit,
+            offset=True,
+            signed=False,
+            mode="tensor_wise",
         )
-        instance.sync_parameters(src="weight", verbose=verbose)
-        if bias:
-            instance.bias.data.copy_(layer.bias)
 
-        return instance
+        crosstalk_filter_size = 3
+        self.phase_U_quantizer = PhaseQuantizer(
+            self.w_bit,
+            self.v_pi,
+            self.v_max,
+            gamma_noise_std=0,
+            crosstalk_factor=0,
+            crosstalk_filter_size=crosstalk_filter_size,
+            random_state=0,
+            mode="butterfly",
+            device=self.device,
+        )
+
+        self.phase_V_quantizer = PhaseQuantizer(
+            self.w_bit,
+            self.v_pi,
+            self.v_max,
+            gamma_noise_std=0,
+            crosstalk_factor=0,
+            crosstalk_filter_size=crosstalk_filter_size,
+            random_state=0,
+            mode="butterfly",
+            device=self.device,
+        )
+
+        self.output_quantizer = ActQuantizer_LSQ(
+            None,
+            device=self.device,
+            nbits=self.out_bit,
+            offset=True,
+            signed=False,
+            mode="tensor_wise",
+        )
+
+        ## add input transform
+        self.add_transform("input", "input", {"input_transform": self._input_transform})
+
+        ## add weight transform
+
+        ## add a transform called "build_weight" for parameter group ("phase_U", "phase_S", "phase_V") called "phase"
+        self.add_transform(
+            self.mode, "weight", {"build_weight": self._weight_transform}
+        )
+
+        ## add output transform
+        self.add_transform(
+            "output", "output", {"output_transform": self._output_transform}
+        )
 
     def build_weight_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tensor:
         # differentiable feature is gauranteed
@@ -263,69 +274,82 @@ class FFTONNBlockLinear(ONNBaseLayer):
         self.weight.data.copy_(weight)
         return weight
 
-    def sync_parameters(self, src: str = "weight", steps: int = 3000, verbose: bool = False) -> None:
+    def sync_parameters(
+        self, src: str = "weight", steps: int = 3000, verbose: bool = False
+    ) -> None:
         """
         description: synchronize all parameters from the source parameters
         """
         if src == "phase":
-            # phase to weight
-            self.weight.data.copy_(self.build_weight_from_usv(self.U.data, self.S.data, self.V.data))
+            self.weight.data.copy_(
+                partition_chunks(
+                    self.transform_weight(self.weights)["weight"],
+                    out_shape=self.weight.shape,
+                )
+            )
         elif src == "weight":
             # weight to phase
             target = self.weight.data
             params = {}
+            phase_U = self.Tr.phases
+            phase_V = self.T.phases
+            if (
+                self.w_bit < 16
+                or self.gamma_noise_std > 1e-5
+                or self.crosstalk_factor > 1e-5
+            ) and phase_U.requires_grad:
+                phase_U = self.phase_U_quantizer(phase_U)
+                phase_V = self.phase_V_quantizer(phase_V)
+
             if not self.T.phases.requires_grad:
-                target = target.matmul(torch.linalg.inv(self.V.data))
+                target = target.matmul(
+                    torch.linalg.inv(self.T.build_weight(phase_V.data))
+                )
             else:
                 params["V"] = self.T.phases
             if not self.Tr.phases.requires_grad:
-                target = torch.linalg.inv(self.U.data).matmul(target)
+                target = torch.linalg.inv(self.Tr.build_weight(phase_U.data)).matmul(
+                    target
+                )
             else:
                 params["U"] = self.Tr.phases
-        
+
             params["S"] = self.S
-            if len(params) == 1:  # only has self.S, perform optimal singular value projection
+            if (
+                len(params) == 1
+            ):  # only has self.S, perform optimal singular value projection
                 self.S.data.copy_(torch.linalg.diagonal(target))
             else:  # perform gradient descent to solve
-                optimizer = torch.optim.Adam(list(params.values()), lr=1e-3)
-                for i in range(steps):
-                    w = self.S
-                    if "V" in params:
-                        w = w.unsqueeze(-1) * self.V
-                        
-                    if "U" in params:
-                        U = self.U
-                        if w.ndim == self.S.ndim + 1:
-                            w = U.matmul(w)
-                        else:
-                            w = U * w.unsqueeze(-2)
-                            
-                    loss = F.mse_loss(torch.view_as_real(target), torch.view_as_real(w))
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    if verbose and (i % 500 == 0 or i == steps - 1):
-                        logger.info(f"Sync weight to phase: step = {i:5d}, mse = {loss.item():.2e}")
+                target = merge_chunks(self.weight.data)[
+                    : self.out_features, : self.in_features
+                ]
+
+                def build_weight_fn():
+                    return self.transform_weight(self.weights)["weight"]
+
+                self.map_layer(
+                    target=target,
+                    param_list=list(params.values()),
+                    build_weight_fn=build_weight_fn,
+                    mode="regression",
+                    num_steps=steps,
+                    verbose=verbose,
+                )
 
         else:
             raise NotImplementedError
-        if verbose:
-            with torch.no_grad():
-                target = self.weight.data.clone()
-                w = self.build_weight()
-                error = F.mse_loss(torch.view_as_real(w), torch.view_as_real(target))
-                logger.info(f"Mapping Linear to FFTONNBlockLinear: MSE = {error:.2e}")
 
-    def build_weight(self, update_list: set = {"phase_U", "phase_S", "phase_V"}) -> Tensor:
-        weight = self.build_weight_from_usv(self.U, self.S, self.V)
-
-        return weight
-
-    def set_gamma_noise(self, noise_std: float, random_state: Optional[int] = None) -> None:
+    def set_gamma_noise(
+        self, noise_std: float, random_state: Optional[int] = None
+    ) -> None:
         self.gamma_noise_std = noise_std
-        self.phase_U_quantizer.set_gamma_noise(noise_std, self.phase_U.size(), random_state)
+        self.phase_U_quantizer.set_gamma_noise(
+            noise_std, self.phase_U.size(), random_state
+        )
         # self.phase_S_quantizer.set_gamma_noise(noise_std, self.phase_S.size(), random_state)
-        self.phase_V_quantizer.set_gamma_noise(noise_std, self.phase_V.size(), random_state)
+        self.phase_V_quantizer.set_gamma_noise(
+            noise_std, self.phase_V.size(), random_state
+        )
 
     def set_crosstalk_factor(self, crosstalk_factor: float) -> None:
         self.crosstalk_factor = crosstalk_factor
@@ -341,7 +365,11 @@ class FFTONNBlockLinear(ONNBaseLayer):
 
     def set_input_bitwidth(self, in_bit: int) -> None:
         self.in_bit = in_bit
-        self.input_quantizer.set_bitwidth(in_bit)
+        self.input_quantizer.set_bit(in_bit)
+
+    def set_output_bitwidth(self, out_bit: int) -> None:
+        self.out_bit = out_bit
+        self.output_quantizer.set_bit(out_bit)
 
     def load_parameters(self, param_dict: Dict[str, Any]) -> None:
         """
@@ -350,27 +378,64 @@ class FFTONNBlockLinear(ONNBaseLayer):
         """
         super().load_parameters(param_dict=param_dict)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def _input_transform(self, x: Tensor) -> Tensor:
         if self.in_bit < 16:
             x = self.input_quantizer(x)
-        x = x.to(torch.cfloat)
-        if not self.fast_forward_flag or self.weight is None:
-            weight = self.build_weight()  # [p, q, k, k]
+        return x
+
+    def _weight_transform(
+        self, weights: Dict, update_list: set = {"phase_U", "S", "phase_V"}
+    ) -> Tensor:
+        ### not differentiable
+        phase_U, S, phase_V = weights
+        if (
+            self.w_bit < 16
+            or self.gamma_noise_std > 1e-5
+            or self.crosstalk_factor > 1e-5
+        ) and phase_U.requires_grad:
+            phase_U = self.phase_U_quantizer(phase_U)
+            phase_V = self.phase_V_quantizer(phase_V)
+
+        if self.phase_noise_std > 1e-5:
+            ### phase_S is assumed to be protected
+            phase_U = phase_U + gen_gaussian_noise(
+                phase_U,
+                0,
+                self.phase_noise_std,
+                trunc_range=(-2 * self.phase_noise_std, 2 * self.phase_noise_std),
+            )
+            phase_V = phase_V + gen_gaussian_noise(
+                phase_V,
+                0,
+                self.phase_noise_std,
+                trunc_range=(-2 * self.phase_noise_std, 2 * self.phase_noise_std),
+            )
+
+        weight = self.build_weight_from_usv(
+            self.Tr.build_weight(phase_U),
+            S,
+            self.T.build_weight(phase_V),
+        )
+
+        weight = merge_chunks(weight)[: self.out_features, : self.in_features]
+        if self.photodetect == "coherent":
+            weight = weight.real - weight.imag
         else:
-            weight = self.weight
-        offset = int(np.ceil(self.grid_dim_x / 2)) * self.miniblock
-        weight = merge_chunks(weight)[: self.out_features, : self.in_features].t()
-        weight_pos = weight[:offset, :]
-        weight_neg = weight[offset:, :]
-        x_pos = x[..., :offset]
-        x_neg = x[..., offset:]
-        x_pos = x_pos.matmul(weight_pos)
-        x_pos = x_pos.real.square() + x_pos.imag.square()
-        x_neg = x_neg.matmul(weight_neg)
-        x_neg = x_neg.real.square() + x_neg.imag.square()
-        x = x_pos - x_neg
+            raise NotImplementedError(
+                f"Photodetect mode {self.photodetect} not implemented."
+            )
+        return weight
 
-        if self.bias is not None:
-            x = x + self.bias.unsqueeze(0)
+    def _output_transform(self, x: Tensor) -> Tensor:
+        if self.out_bit < 16:
+            x = self.output_quantizer(x)
+        return x
 
+    def _forward_impl(self, x: Tensor, weights: Dict[str, Tensor]) -> Tensor:
+        weight = weights["weight"]
+        x = F.linear(
+            x,
+            weight,
+            bias=None,
+        )
         return x

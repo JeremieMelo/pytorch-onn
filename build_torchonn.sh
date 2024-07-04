@@ -8,6 +8,7 @@ echo "rm -rf ${output_folder}";
 rm -rf "${output_folder}";
 echo "mkdir -p ${output_folder}";
 mkdir -p "${output_folder}";
+echo "conda mambabuild . --no-anaconda-upload --no-test --output-folder ${output_folder} -c pytorch -c nvidia";
 conda mambabuild . --no-anaconda-upload --no-test --output-folder "${output_folder}" -c pytorch -c nvidia;
 echo "Finished conda mambabuild";
 

@@ -467,7 +467,7 @@ class ONNBaseConv2d(ONNBaseLayer):
         if self.in_bit is not None:
             s += ", in_bit={in_bit}"
         if self.w_bit is not None:
-            s += ", in_bit={w_bit}"
+            s += ", w_bit={w_bit}"
         if self.out_bit is not None:
             s += ", out_bit={out_bit}"
 
@@ -581,7 +581,7 @@ class ONNBaseLinear(ONNBaseLayer):
         if self.in_bit is not None:
             s += ", in_bit={in_bit}"
         if self.w_bit is not None:
-            s += ", in_bit={w_bit}"
+            s += ", w_bit={w_bit}"
         if self.out_bit is not None:
             s += ", out_bit={out_bit}"
 

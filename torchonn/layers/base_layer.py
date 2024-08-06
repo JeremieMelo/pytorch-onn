@@ -49,16 +49,18 @@ class ONNBaseLayer(nn.Module):
         self, param_groups: Dict, buffer_groups: Dict
     ) -> None:
         for p_name, p in param_groups.items():
-            if not hasattr(self, p_name):
-                if not isinstance(p, nn.Parameter):
-                    p = nn.Parameter(p)
-                self.register_parameter(p_name, p)
+            if hasattr(self, p_name):
+                delattr(self, p_name)
+            if not isinstance(p, nn.Parameter):
+                p = nn.Parameter(p)
+            self.register_parameter(p_name, p)
 
         for p_name, p in buffer_groups.items():
-            if not hasattr(self, p_name):
-                if isinstance(p, nn.Parameter):
-                    p = p.data
-                self.register_buffer(p_name, p)
+            if hasattr(self, p_name):
+                delattr(self, p_name)
+            if isinstance(p, nn.Parameter):
+                p = p.data
+            self.register_buffer(p_name, p)
 
     def reset_parameters(self) -> None:
         raise NotImplementedError
@@ -424,6 +426,7 @@ class ONNBaseConv2d(ONNBaseLayer):
         groups = layer.groups
         bias = layer.bias is not None
         device = layer.weight.data.device
+        cfgs["device"] = device
         instance = cls(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -435,6 +438,7 @@ class ONNBaseConv2d(ONNBaseLayer):
             bias=bias,
             **cfgs,
         ).to(device)
+   
         if "miniblock" in instance.__dict__:
             weight = partition_chunks(
                 layer.weight.data.flatten(1), instance.weight.shape
@@ -535,7 +539,7 @@ class ONNBaseLinear(ONNBaseLayer):
     @classmethod
     def from_layer(
         cls,
-        layer: nn.Conv2d,
+        layer: nn.Linear,
         **cfgs,
     ) -> nn.Module:
         """Initialize from a nn.Conv2d/nn.Linear layer. Weight mapping will be performed
@@ -553,6 +557,7 @@ class ONNBaseLinear(ONNBaseLayer):
         out_features = layer.out_features
         bias = layer.bias is not None
         device = layer.weight.data.device
+        cfgs["device"] = device
         instance = cls(
             in_features=in_features,
             out_features=out_features,

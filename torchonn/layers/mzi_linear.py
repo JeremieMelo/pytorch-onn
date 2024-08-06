@@ -114,25 +114,25 @@ class MZIBlockLinear(ONNBaseLinear):
 
     def build_parameters(self, mode: str = "weight") -> None:
         ## weight mode
-        weight = torch.empty(
+        self.weight = torch.empty(
             self.grid_dim_y, self.grid_dim_x, *self.miniblock, device=self.device
         )
         ## usv mode
-        U = torch.empty(
+        self.U = torch.empty(
             self.grid_dim_y,
             self.grid_dim_x,
             *self.miniblock[:-1],
             self.miniblock[-2],
             device=self.device,
         )
-        S = torch.empty(
+        self.S = torch.empty(
             self.grid_dim_y,
             self.grid_dim_x,
             *self.miniblock[:-2],
             min(self.miniblock[-2:]),
             device=self.device,
         )
-        V = torch.empty(
+        self.V = torch.empty(
             self.grid_dim_y,
             self.grid_dim_x,
             *self.miniblock[:-2],
@@ -141,17 +141,17 @@ class MZIBlockLinear(ONNBaseLinear):
             device=self.device,
         )
         ## phase mode
-        delta_list_U = torch.empty(U.shape[:-1], device=self.device)
-        phase_U = torch.empty(
+        self.delta_list_U = torch.empty(self.U.shape[:-1], device=self.device)
+        self.phase_U = torch.empty(
             self.grid_dim_y,
             self.grid_dim_x,
             *self.miniblock[:-2],
             self.miniblock[-1] * (self.miniblock[-1] - 1) // 2,
             device=self.device,
         )
-        phase_S = torch.empty_like(S)
-        delta_list_V = torch.empty(V.shape[:-1], device=self.device)
-        phase_V = torch.empty(
+        self.phase_S = torch.empty_like(self.S)
+        self.delta_list_V = torch.empty(self.V.shape[:-1], device=self.device)
+        self.phase_V = torch.empty(
             self.grid_dim_y,
             self.grid_dim_x,
             *self.miniblock[:-2],
@@ -159,7 +159,7 @@ class MZIBlockLinear(ONNBaseLinear):
             device=self.device,
         )
         # TIA gain
-        S_scale = torch.randn(
+        self.S_scale = torch.randn(
             self.grid_dim_y,
             self.grid_dim_x,
             *self.miniblock[:-2],
@@ -167,34 +167,39 @@ class MZIBlockLinear(ONNBaseLinear):
             device=self.device,
         )
 
+        self.register_parameter_buffer(*self.get_param_buffer_groups(mode))
+
+        self.pack_weights()
+
+    def get_param_buffer_groups(self, mode: str) -> Tensor:
         buffer_groups = {
-            "weight": weight,
-            "U": U,
-            "S": S,
-            "V": V,
-            "phase_U": phase_U,
-            "phase_S": phase_S,
-            "phase_V": phase_V,
-            "S_scale": S_scale,
-            "delta_list_U": delta_list_U,
-            "delta_list_V": delta_list_V,
+            "weight": self.weight,
+            "U": self.U,
+            "S": self.S,
+            "V": self.V,
+            "phase_U": self.phase_U,
+            "phase_S": self.phase_S,
+            "phase_V": self.phase_V,
+            "S_scale": self.S_scale,
+            "delta_list_U": self.delta_list_U,
+            "delta_list_V": self.delta_list_V,
         }
 
         if mode == "weight":
-            param_groups = {"weight": Parameter(weight)}
+            param_groups = {"weight": Parameter(self.weight)}
 
         elif mode == "usv":
             param_groups = {
-                "U": Parameter(U),
-                "S": Parameter(S),
-                "V": Parameter(V),
+                "U": Parameter(self.U),
+                "S": Parameter(self.S),
+                "V": Parameter(self.V),
             }
         elif mode == "phase":
             param_groups = {
-                "phase_U": Parameter(phase_U),
-                "phase_S": Parameter(phase_S),
-                "phase_V": Parameter(phase_V),
-                "S_scale": Parameter(S_scale),
+                "phase_U": Parameter(self.phase_U),
+                "phase_S": Parameter(self.phase_S),
+                "phase_V": Parameter(self.phase_V),
+                "S_scale": Parameter(self.S_scale),
             }
         elif mode == "voltage":
             raise NotImplementedError
@@ -204,12 +209,7 @@ class MZIBlockLinear(ONNBaseLinear):
         for name in param_groups:
             del buffer_groups[name]
 
-        self.register_parameter_buffer(
-            param_groups=param_groups,
-            buffer_groups=buffer_groups,
-        )
-
-        self.pack_weights()
+        return param_groups, buffer_groups
 
     def pack_weights(self):
         if self.mode == "weight":
@@ -267,6 +267,7 @@ class MZIBlockLinear(ONNBaseLinear):
 
     def switch_mode_to(self, mode: str) -> None:
         super().switch_mode_to(mode)
+        self.register_parameter_buffer(*self.get_param_buffer_groups(mode=mode))
         self.pack_weights()
 
     def build_transform(self) -> None:

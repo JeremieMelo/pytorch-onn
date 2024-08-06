@@ -15,7 +15,6 @@ from mmengine.registry import MODELS
 from pyutils.compute import gen_gaussian_noise
 from pyutils.general import logger
 from pyutils.quant.lsq import ActQuantizer_LSQ
-from pyutils.quantize import input_quantize_fn
 from torch import Tensor, nn
 from torch.nn import Parameter, init
 from torch.types import _size
@@ -136,11 +135,12 @@ class FFTONNBlockConv2d(ONNBaseConv2d):
             enable_last_level_phase_shifter=True,
             device=self.device,
         )
-        self.S = Parameter(
-            torch.zeros(
-                self.grid_dim_y, self.grid_dim_x, *self.miniblock[:-1], dtype=torch.cfloat
-            ).to(self.device)
-        )  # complex frequency-domain weights
+        self.S = torch.zeros(
+            self.grid_dim_y,
+            self.grid_dim_x,
+            *self.miniblock[:-1],
+            dtype=torch.cfloat,
+        ).to(self.device)  # complex frequency-domain weights
         self.Tr = TrainableButterfly(
             length=self.miniblock[-1],
             reverse=True,
@@ -149,19 +149,16 @@ class FFTONNBlockConv2d(ONNBaseConv2d):
             device=self.device,
         )
 
+        self.register_parameter_buffer(*self.get_param_buffer_groups(self.mode))
+
+        self.pack_weights()
+
+    def get_param_buffer_groups(self, mode: str) -> Tensor:
         param_groups = {
-            "phase_V": self.T.phases,
-            "phase_U": self.Tr.phases,
             "S": self.S,
         }
         buffer_groups = {"weight": self.weight}
-
-        self.register_parameter_buffer(
-            param_groups=param_groups,
-            buffer_groups=buffer_groups,
-        )
-
-        self.pack_weights()
+        return param_groups, buffer_groups
 
     def pack_weights(self):
         ## key is self.mode, which should match the src_name for weight_transform
@@ -188,9 +185,7 @@ class FFTONNBlockConv2d(ONNBaseConv2d):
         if self.device.type == "cpu":
             S = torch.linalg.svdvals(W)
         else:
-            S = torch.linalg.svdvals(
-                W, driver="gesvd"
-            )  # must use QR decomposition
+            S = torch.linalg.svdvals(W, driver="gesvd")  # must use QR decomposition
         self.S.data.copy_(S)
 
         if mode == "zero_bias":
@@ -221,6 +216,7 @@ class FFTONNBlockConv2d(ONNBaseConv2d):
 
     def switch_mode_to(self, mode: str) -> None:
         super().switch_mode_to(mode)
+        self.register_parameter_buffer(*self.get_param_buffer_groups(mode=mode))
         self.pack_weights()
 
     def build_transform(self) -> None:

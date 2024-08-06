@@ -18,11 +18,10 @@ from torchonn.layers import (
     MZIBlockLinear,
     FFTONNBlockLinear,
     FFTONNBlockConv2d,
-    AllPassMORRCirculantLinear,
-    AllPassMORRCirculantConv2d,
-    AddDropMRRConv2d,
+    # AllPassMORRCirculantLinear,
+    # AllPassMORRCirculantConv2d,
+    # AddDropMRRConv2d,
     AddDropMRRBlockConv2d,
-    AddDropMRRLinear,
     AddDropMRRBlockLinear,
     PCMConv2d,
     PCMLinear,
@@ -385,62 +384,85 @@ class TestLayers(unittest.TestCase):
     #     print(weight)
     #     print(y)
     
-    # def test_mrrblockconv2d(self):
-    #     device = torch.device("cuda:0")
-    #     layer = AddDropMRRBlockConv2d(
-    #         8,
-    #         8,
-    #         3,
-    #         miniblock=4,
-    #         bias=True,
-    #         mode="weight",
-    #         device=device,
-    #     ).to(device)
-    #     layer.reset_parameters()
-    #     layer.set_input_bitwidth(8)
-    #     layer.set_weight_bitwidth(8)
-    #     x = torch.randn(1, 8, 4, 4, device=device)
-    #     weight = layer.build_weight().data.clone()
-    #     y = layer(x).detach()
-    #     print(weight)
-    #     print(y)
+    def test_mrrblockconv2d(self):
+        device = torch.device("cuda:0")
+        conv2d = AddDropMRRBlockConv2d(8, 8, 3, bias=False, miniblock=4, mode="weight", device=device).to(device)
+        conv2d.reset_parameters()
+        x = torch.randn(1, 8, 4, 4, device=device)
+        weight = conv2d.transform_weight(conv2d.weights)["weight"].data.clone()
+        y = conv2d(x).detach()
+        conv2d.switch_mode_to("phase")
+        conv2d.sync_parameters(src="weight")
+        weight2 = conv2d.transform_weight(conv2d.weights)["weight"].data.clone()
+        y2 = conv2d(x).detach()
+        # print(weight)
+        # print(weight2)
+        # print(y)
+        # print(y2)
+
+        assert torch.allclose(weight, weight2, rtol=1e-4, atol=1e-4), print(
+            "weight max abs error:", (weight - weight2).abs().max().item()
+        )
+        assert torch.allclose(y, y2, rtol=1e-3, atol=1e-3), print(
+            "output max abs error:", (y - y2).abs().max().item()
+        )
+
+        # test layer conversion
+        conv2d = torch.nn.Conv2d(8, 8, 3, stride=2, bias=True).to(device)
+        layer = AddDropMRRBlockConv2d.from_layer(conv2d, miniblock=4, mode="phase")
+        y1 = conv2d(x).detach()
+        y2 = layer(x).detach()
+        # print(y1)
+        # print(y2)
+
+        assert torch.allclose(y1, y2, rtol=1e-3, atol=1e-3), print(
+            "converted result max abs error:", (y1 - y2).abs().max().item()
+        )
+
+        layer.set_weight_bitwidth(8)
+        layer(x).sum().backward()
+        print(layer.phase.grad.abs().mean())
+        print(layer.S_scale.grad.abs().mean())
     
-    # def test_mrrlinear(self):
-    #     device = torch.device("cuda:0")
-    #     layer = AddDropMRRLinear(
-    #         8,
-    #         8,
-    #         bias=True,
-    #         mode="weight",
-    #         device=device,
-    #     ).to(device)
-    #     layer.reset_parameters()
-    #     layer.set_input_bitwidth(8)
-    #     layer.set_weight_bitwidth(8)
-    #     x = torch.randn(1, 8, device=device)
-    #     weight = layer.build_weight().data.clone()
-    #     y = layer(x).detach()
-    #     print(weight)
-    #     print(y)
-    
-    # def test_mrrblocklinear(self):
-    #     device = torch.device("cuda:0")
-    #     layer = AddDropMRRBlockLinear(
-    #         8,
-    #         8,
-    #         miniblock=4,
-    #         bias=True,
-    #         mode="weight",
-    #         device=device,
-    #     ).to(device)
-    #     layer.reset_parameters()
-    #     layer.set_input_bitwidth(8)
-    #     layer.set_weight_bitwidth(8)
-    #     x = torch.randn(1, 8, device=device)
-    #     weight = layer.build_weight().data.clone()
-    #     y = layer(x).detach()
-    #     print(weight)
-    #     print(y)
+    def test_mrrblocklinear(self):
+        device = torch.device("cuda:0")
+        linear = AddDropMRRBlockLinear(8, 8, bias=False, miniblock=4, mode="weight", device=device).to(device)
+        linear.reset_parameters()
+        x = torch.randn(1, 8, device=device)
+        weight = linear.transform_weight(linear.weights)["weight"].data.clone()
+        y = linear(x).detach()
+        linear.switch_mode_to("phase")
+        linear.sync_parameters(src="weight")
+        weight2 = linear.transform_weight(linear.weights)["weight"].data.clone()
+        y2 = linear(x).detach()
+        print(weight)
+        print(weight2)
+        # print(y)
+        # print(y2)
+
+        assert torch.allclose(weight, weight2, rtol=1e-4, atol=1e-4), print(
+            "weight max abs error:", (weight - weight2).abs().max().item()
+        )
+        assert torch.allclose(y, y2, rtol=1e-3, atol=1e-3), print(
+            "output max abs error:", (y - y2).abs().max().item()
+        )
+
+        # test layer conversion
+        linear = torch.nn.Linear(8, 8, bias=True).to(device)
+        layer = AddDropMRRBlockLinear.from_layer(linear, miniblock=4, mode="phase")
+        y1 = linear(x).detach()
+        y2 = layer(x).detach()
+        # print(y1)
+        # print(y2)
+
+        assert torch.allclose(y1, y2, rtol=1e-3, atol=1e-3), print(
+            "converted result max abs error:", (y1 - y2).abs().max().item()
+        )
+
+        layer.set_weight_bitwidth(8)
+        layer(x).sum().backward()
+        print(layer.phase.grad.abs().mean())
+        print(layer.S_scale.grad.abs().mean())
 
 if __name__ == "__main__":
     unittest.main()

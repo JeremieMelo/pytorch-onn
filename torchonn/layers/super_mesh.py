@@ -5,6 +5,7 @@ Date: 2022-04-18 21:04:05
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2022-04-19 01:41:51
 """
+
 import itertools
 from functools import lru_cache
 from typing import Iterable, List, Optional, Tuple
@@ -13,9 +14,11 @@ import numpy as np
 import torch
 from pyutils.compute import gen_gaussian_noise
 from pyutils.general import logger
+from pyutils.quant.lsq import WeightQuantizer_LSQ
 from pyutils.torch_train import set_torch_deterministic
 from torch import Tensor, nn
 from torch.types import Device
+
 from torchonn.op.cross_op import hard_diff_round
 from torchonn.op.dc_op import dc_quantize_fn
 
@@ -70,12 +73,14 @@ class ArchSampler(object):
         n_chunks = self.strategy["n_chunks"]
         if self.strategy["chunk_mode"] == "same_interval":
             logger.warning(
-                f"same_interval chunking may cause extra long "
-                f"time to sample a sub network because of the "
-                f"Central Limit Theorem of n_ops in a subnet"
+                "same_interval chunking may cause extra long "
+                "time to sample a sub network because of the "
+                "Central Limit Theorem of n_ops in a subnet"
             )
             self.n_ops_per_chunk = list(
-                np.linspace(self.n_ops_smallest, self.n_ops_largest, n_chunks + 1).astype(int)
+                np.linspace(
+                    self.n_ops_smallest, self.n_ops_largest, n_chunks + 1
+                ).astype(int)
             )
         elif self.strategy["chunk_mode"] == "same_n_samples":
             logger.info("estimating the chunks...")
@@ -90,7 +95,9 @@ class ArchSampler(object):
             self.n_ops_per_chunk[0] = self.n_ops_smallest
             self.n_ops_per_chunk[-1] = self.n_ops_largest
         else:
-            raise NotImplementedError(f"chunk mode {self.strategy['chunk_mode']} not supported.")
+            raise NotImplementedError(
+                f"chunk mode {self.strategy['chunk_mode']} not supported."
+            )
 
     def get_sample_stats(self, sample_arch):
         n_ops = 0
@@ -126,12 +133,18 @@ class ArchSampler(object):
             if not isinstance(layer_space[0], Iterable):
                 # share front layer
                 self.n_ops_largest += max(layer_space)
-                if not self.is_block_based or k < min(block_space) * self.n_layers_per_block:
+                if (
+                    not self.is_block_based
+                    or k < min(block_space) * self.n_layers_per_block
+                ):
                     self.n_ops_smallest += min(layer_space)
             else:
                 # arbitrary layer
                 self.n_ops_largest += max(list(map(len, layer_space)))
-                if not self.is_block_based or k < min(block_space) * self.n_layers_per_block:
+                if (
+                    not self.is_block_based
+                    or k < min(block_space) * self.n_layers_per_block
+                ):
                     self.n_ops_smallest += min(list(map(len, layer_space)))
 
     def get_random_sample_arch(self):
@@ -155,7 +168,11 @@ class ArchSampler(object):
             n_diffs = self.strategy["n_diffs"]
             assert n_diffs <= len(self.arch_space)
             diff_parts_idx = np.random.choice(
-                [i for i in np.arange(len(self.arch_space)) if len(self.arch_space[i]) > 1],
+                [
+                    i
+                    for i in np.arange(len(self.arch_space))
+                    if len(self.arch_space[i]) > 1
+                ],
                 n_diffs,
                 replace=False,
             )
@@ -179,14 +196,18 @@ class ArchSampler(object):
                 if self.strategy["subspace_mode"] == "expand":
                     # the subspace size is expanding
                     if self.strategy["direction"] == "top_down":
-                        if n_ops >= list(reversed(self.n_ops_per_chunk))[current_chunk + 1]:
+                        if (
+                            n_ops
+                            >= list(reversed(self.n_ops_per_chunk))[current_chunk + 1]
+                        ):
                             break
                     elif self.strategy["direction"] == "bottom_up":
                         if n_ops <= self.n_ops_per_chunk[current_chunk + 1]:
                             break
                     else:
                         raise NotImplementedError(
-                            f"Direction mode {self.strategy['direction']} " f"not supported."
+                            f"Direction mode {self.strategy['direction']} "
+                            f"not supported."
                         )
                 elif self.strategy["subspace_mode"] == "same":
                     # the subspace size is the same
@@ -198,14 +219,16 @@ class ArchSampler(object):
                         right = self.n_ops_per_chunk[current_chunk + 1]
                     else:
                         raise NotImplementedError(
-                            f"Direction mode {self.strategy['direction']} " f"not supported."
+                            f"Direction mode {self.strategy['direction']} "
+                            f"not supported."
                         )
 
                     if left <= n_ops <= right:
                         break
                 else:
                     raise NotImplementedError(
-                        f"Subspace mode {self.strategy['subspace_mode']} " f"not supported."
+                        f"Subspace mode {self.strategy['subspace_mode']} "
+                        f"not supported."
                     )
         elif self.strategy["name"] == "limit_diff_expanding":
             """
@@ -224,7 +247,11 @@ class ArchSampler(object):
             self.current_stage = current_stage
             self.current_chunk = current_chunk
             diff_parts_idx = np.random.choice(
-                [i for i in np.arange(len(self.arch_space)) if len(self.arch_space[i]) > 1],
+                [
+                    i
+                    for i in np.arange(len(self.arch_space))
+                    if len(self.arch_space[i]) > 1
+                ],
                 n_diffs,
                 replace=False,
             )
@@ -233,7 +260,9 @@ class ArchSampler(object):
                 layer_arch_space = self.arch_space[idx]
                 n_choices = len(layer_arch_space)
                 new_space = layer_arch_space[
-                    int(round((n_choices - 1) * (1 - (current_chunk + 1) / (n_chunks)))) :
+                    int(
+                        round((n_choices - 1) * (1 - (current_chunk + 1) / (n_chunks)))
+                    ) :
                 ]
                 if len(new_space) == 1:
                     sample_arch[idx] = new_space[0]
@@ -263,14 +292,20 @@ class ArchSampler(object):
             self.current_stage = current_stage
             self.current_chunk = current_chunk
             diff_parts_idx = np.random.choice(
-                [i for i in np.arange(len(self.arch_space)) if len(self.arch_space[i]) > 1],
+                [
+                    i
+                    for i in np.arange(len(self.arch_space))
+                    if len(self.arch_space[i]) > 1
+                ],
                 n_diffs,
                 replace=False,
             )
             new_arch_space = self.arch_space.copy()
             n_blk_choices = len(new_arch_space[-1])
             new_arch_space[-1] = new_arch_space[-1][
-                int(round((n_blk_choices - 1) * (1 - (current_chunk + 1) / (n_chunks)))) :
+                int(
+                    round((n_blk_choices - 1) * (1 - (current_chunk + 1) / (n_chunks)))
+                ) :
             ]
             for idx in diff_parts_idx:
                 sample_arch[idx] = np.random.choice(new_arch_space[idx])
@@ -312,7 +347,9 @@ def get_named_sample_arch(arch_space, name):
         ratio = eval(name.split("_")[1].replace("ratio", ""))
         assert ratio <= 1
         for layer_arch_space in arch_space[:-1]:
-            layer_arch = layer_arch_space[int(round((len(layer_arch_space) - 1) * ratio))]
+            layer_arch = layer_arch_space[
+                int(round((len(layer_arch_space) - 1) * ratio))
+            ]
             sample_arch.append(layer_arch)
         sample_arch.append(n_block)
     elif name.startswith("ratio"):
@@ -320,7 +357,9 @@ def get_named_sample_arch(arch_space, name):
         ratio = eval(name.replace("ratio", ""))
         assert ratio <= 1
         for layer_arch_space in arch_space:
-            layer_arch = layer_arch_space[int(round((len(layer_arch_space) - 1) * ratio))]
+            layer_arch = layer_arch_space[
+                int(round((len(layer_arch_space) - 1) * ratio))
+            ]
             sample_arch.append(layer_arch)
     else:
         raise NotImplementedError(f"Arch name {name} not supported.")
@@ -372,46 +411,84 @@ class SuperBatchedPSLayer(SuperOpticalModule):
         self,
         grid_dim_x: int,
         grid_dim_y: int,
-        n_waveguides: int,
+        miniblock: Tuple[int],  # miniblock[:-2] from ONNBaselayers
+        n_waveguides: int,  # miniblock[-2] or miniblock[-1] from ONNBaselayers
         share_uv: str = "global",
         trainable: bool = True,
+        w_bit: int = 32,
         device: Device = torch.device("cuda:0"),
     ):
         super().__init__(n_waveguides=n_waveguides)
         self.grid_dim_x = grid_dim_x
         self.grid_dim_y = grid_dim_y
+        self.miniblock = miniblock
         self.share_uv = share_uv.lower()
         assert (
             self.share_uv in self._share_uv_list
         ), f"share_uv only supports {self._share_uv_list}, but got {share_uv}"
         self.trainable = trainable
+        self.w_bit = w_bit
         self.device = device
+        self.phase_quantizer = WeightQuantizer_LSQ(
+            out_features=self.grid_dim_y,
+            device=self.device,
+            nbits=self.w_bit,
+            offset=True,
+            signed=False,
+            mode="tensor_wise",
+        )
+
         self.build_parameters()
         self.reset_parameters()
         self.set_phase_noise(0)
+
+    def set_bitwidth(self, bitwidth: int) -> None:
+        self.w_bit = bitwidth
+        self.phase_quantizer.set_bit(bitwidth)
 
     def build_parameters(self):
         """weight is the phase shift of the phase shifter"""
         if self.share_uv == "global":
             self.weight = nn.Parameter(
-                torch.empty(self.n_waveguides, device=self.device), requires_grad=self.trainable
+                torch.empty(
+                    1, 1, *self.miniblock, self.n_waveguides, device=self.device
+                ),
+                requires_grad=self.trainable,
             )
         elif self.share_uv == "row":
             ## use the same PS within a row => share U
             self.weight = nn.Parameter(
-                torch.empty(self.grid_dim_y, self.n_waveguides, device=self.device),
+                torch.empty(
+                    self.grid_dim_y,
+                    1,
+                    *self.miniblock,
+                    self.n_waveguides,
+                    device=self.device,
+                ),
                 requires_grad=self.trainable,
             )
         elif self.share_uv == "col":
             ## use the same PS within a column => share V
             self.weight = nn.Parameter(
-                torch.empty(self.grid_dim_x, self.n_waveguides, device=self.device),
+                torch.empty(
+                    1,
+                    self.grid_dim_x,
+                    *self.miniblock,
+                    self.n_waveguides,
+                    device=self.device,
+                ),
                 requires_grad=self.trainable,
             )
         elif self.share_uv == "none":
             ## independent PS for each block
             self.weight = nn.Parameter(
-                torch.empty(self.grid_dim_y, self.grid_dim_x, self.n_waveguides, device=self.device),
+                torch.empty(
+                    self.grid_dim_y,
+                    self.grid_dim_x,
+                    *self.miniblock,
+                    self.n_waveguides,
+                    device=self.device,
+                ),
                 requires_grad=self.trainable,
             )
         else:
@@ -427,12 +504,16 @@ class SuperBatchedPSLayer(SuperOpticalModule):
             self.weight.data.zero_()
 
     def build_weight(self):
-        if self.phase_noise_std > 0:
-            weight = self.weight + gen_gaussian_noise(
-                torch.zeros_like(self.weight), noise_mean=0, noise_std=self.phase_noise_std
-            )
+        if self.w_bit < 16:
+            weight = self.phase_quantizer(self.weight % (2 * np.pi))
         else:
             weight = self.weight
+
+        if self.phase_noise_std > 0:
+            weight = weight + gen_gaussian_noise(
+                torch.zeros_like(weight), noise_mean=0, noise_std=self.phase_noise_std
+            )
+
         return weight
 
     def forward(self, x: Tensor) -> Tensor:
@@ -442,20 +523,9 @@ class SuperBatchedPSLayer(SuperOpticalModule):
 
         weight = self.build_weight()
         weight = torch.exp(1j * weight)
-        if self.share_uv == "global":
-            # [..., n_waveguides] * [n_waveguides] = [..., n_waveguides]
-            x = x.mul(weight)
-        elif self.share_uv == "row":
-            # [..., p, n_waveguides] * [p, n_waveguides] = [..., p, n_waveguides]
-            x = x.mul(weight)
-        elif self.share_uv == "col":
-            # [..., q, n_waveguides] * [q, n_waveguides] = [..., q, n_waveguides]
-            x = x.mul(weight)
-        elif self.share_uv == "none":
-            # [..., p, q, n_waveguides] * [p, q, n_waveguides] = [..., p, q, n_waveguides]
-            x = x.mul(weight)
-        else:
-            raise ValueError(f"Not supported share_uv: {self.share_uv}")
+        # weight: [p, q, ..., k1]
+        # x: [bs, p, q, ..., k2]
+        x = x.mul(weight)
 
         return x
 
@@ -523,7 +593,7 @@ class SuperDCFrontShareLayer(SuperOpticalModule):
         if self.binary:
             nn.init.uniform_(self.weight, -0.01, 0.01)
         else:
-            nn.init.constant_(self.weight, 2 ** 0.5 / 2)
+            nn.init.constant_(self.weight, 2**0.5 / 2)
 
     def build_weight(self):
         if self.sample_arch < self.max_arch:
@@ -535,7 +605,9 @@ class SuperDCFrontShareLayer(SuperOpticalModule):
 
         if self.dc_noise_std > 0:
             mask = weight.data > 0.9  # only inject noise when t=sqrt(2)/2
-            noise = gen_gaussian_noise(torch.zeros_like(weight), noise_mean=0, noise_std=self.dc_noise_std)
+            noise = gen_gaussian_noise(
+                torch.zeros_like(weight), noise_mean=0, noise_std=self.dc_noise_std
+            )
             noise.masked_fill_(mask, 0)
             weight = weight + noise
 
@@ -568,7 +640,14 @@ class SuperDCFrontShareLayer(SuperOpticalModule):
                 .matmul(out.view(-1, sample_arch, 2, 1))
                 .view(list(x.shape[:-1]) + [n_sample_waveguides])
             )
-            out = torch.cat([x[..., : self.offset], out, x[..., self.offset + n_sample_waveguides :]], dim=-1)
+            out = torch.cat(
+                [
+                    x[..., : self.offset],
+                    out,
+                    x[..., self.offset + n_sample_waveguides :],
+                ],
+                dim=-1,
+            )
         else:
             out = (
                 weight.unsqueeze(0)
@@ -692,12 +771,16 @@ class SuperCRLayer(SuperOpticalModule):
 
         elif alg == "perm":
             self.weight.data.copy_(
-                torch.eye(self.weight.size(0), device=self.device)[torch.randperm(self.weight.size(0))]
+                torch.eye(self.weight.size(0), device=self.device)[
+                    torch.randperm(self.weight.size(0))
+                ]
             )
         elif alg == "near_perm":
             set_torch_deterministic(0)
             self.weight.data.copy_(
-                torch.eye(self.weight.size(0), device=self.device)[torch.randperm(self.weight.size(0))]
+                torch.eye(self.weight.size(0), device=self.device)[
+                    torch.randperm(self.weight.size(0))
+                ]
             )
             margin = 0.9
             self.weight.data.mul_(margin - (1 - margin) / (self.n_waveguides - 1)).add_(
@@ -715,18 +798,28 @@ class SuperCRLayer(SuperOpticalModule):
             forward (bool, optional): forward butterfly or reversed butterfly. Defaults to True.
             level (int, optional): which level or stage in the butterfly transform. Defaults to 0.
         """
-        initial_indices = torch.arange(0, self.n_waveguides, dtype=torch.long, device=self.device)
+        initial_indices = torch.arange(
+            0, self.n_waveguides, dtype=torch.long, device=self.device
+        )
         block_size = 2 ** (level + 2)
         if forward:
             indices = (
-                initial_indices.view(-1, self.n_waveguides // block_size, 2, block_size // 2)
+                initial_indices.view(
+                    -1, self.n_waveguides // block_size, 2, block_size // 2
+                )
                 .transpose(dim0=-2, dim1=-1)
                 .contiguous()
                 .view(-1)
             )
         else:
-            indices = initial_indices.view(-1, self.n_waveguides // block_size, block_size)
-            indices = torch.cat([indices[..., ::2], indices[..., 1::2]], dim=-1).contiguous().view(-1)
+            indices = initial_indices.view(
+                -1, self.n_waveguides // block_size, block_size
+            )
+            indices = (
+                torch.cat([indices[..., ::2], indices[..., 1::2]], dim=-1)
+                .contiguous()
+                .view(-1)
+            )
         eye = torch.eye(self.n_waveguides, device=self.device)[indices, :]
         self.weight.data.copy_(eye)
 
@@ -767,7 +860,8 @@ class SuperCRLayer(SuperOpticalModule):
         https://www.math.uci.edu/~jxin/AutoShuffleNet_KDD2020F.pdf"""
         weight = self.build_weight()
         loss = (
-            weight.norm(p=1, dim=0).sub(weight.norm(p=2, dim=0)).mean() + (1 - weight.norm(p=2, dim=1)).mean()
+            weight.norm(p=1, dim=0).sub(weight.norm(p=2, dim=0)).mean()
+            + (1 - weight.norm(p=2, dim=1)).mean()
         )
         return loss
 
@@ -787,12 +881,14 @@ class SuperCRLayer(SuperOpticalModule):
         d_weight_r = weight.norm(p=1, dim=0).sub(weight.norm(p=2, dim=0))
         # d_weight_c = weight.norm(p=1, dim=1).sub(weight.norm(p=2, dim=1))
         d_weight_c = 1 - weight.norm(p=2, dim=1)
-        loss = self.alm_multiplier[0].dot(d_weight_r + rho / 2 * d_weight_r.square()) + self.alm_multiplier[
-            1
-        ].dot(d_weight_c + rho / 2 * d_weight_c.square())
+        loss = self.alm_multiplier[0].dot(
+            d_weight_r + rho / 2 * d_weight_r.square()
+        ) + self.alm_multiplier[1].dot(d_weight_c + rho / 2 * d_weight_c.square())
         return loss
 
-    def update_alm_multiplier(self, rho: float = 0.1, max_lambda: Optional[float] = None):
+    def update_alm_multiplier(
+        self, rho: float = 0.1, max_lambda: Optional[float] = None
+    ):
         """Update the ALM multiplier lambda
 
         Args:
@@ -806,8 +902,12 @@ class SuperCRLayer(SuperOpticalModule):
             weight = self.build_weight().detach()
             d_weight_r = weight.norm(p=1, dim=0).sub(weight.norm(p=2, dim=0))
             d_weight_c = weight.norm(p=1, dim=1).sub(weight.norm(p=2, dim=1))
-            self.alm_multiplier[0].add_(rho * (d_weight_r + rho / 2 * d_weight_r.square()))
-            self.alm_multiplier[1].add_(rho * (d_weight_c + rho / 2 * d_weight_c.square()))
+            self.alm_multiplier[0].add_(
+                rho * (d_weight_r + rho / 2 * d_weight_r.square())
+            )
+            self.alm_multiplier[1].add_(
+                rho * (d_weight_c + rho / 2 * d_weight_c.square())
+            )
             if max_lambda is not None:
                 self.alm_multiplier.data.clamp_max_(max_lambda)
 
@@ -876,7 +976,9 @@ class SuperCRLayer(SuperOpticalModule):
         self.cr_noise_std = noise_std
 
     def check_perm(self, indices):
-        return tuple(range(len(indices))) == tuple(sorted(indices.cpu().numpy().tolist()))
+        return tuple(range(len(indices))) == tuple(
+            sorted(indices.cpu().numpy().tolist())
+        )
 
     def unitary_projection(self, w, n_step=10, t=0.005, noise_std=0.01):
         w = w.div(t).softmax(dim=-1).round()
@@ -899,7 +1001,9 @@ class SuperCRLayer(SuperOpticalModule):
         with torch.no_grad():
             weight = self.build_weight().detach().data
             self.indices = torch.argmax(weight, dim=1)
-            assert self.check_perm(self.indices), f"{self.indices.cpu().numpy().tolist()}"
+            assert self.check_perm(
+                self.indices
+            ), f"{self.indices.cpu().numpy().tolist()}"
             self.fast_mode = True
             self.weight.requires_grad_(False)
 
@@ -964,6 +1068,7 @@ class SuperMeshADEPT(SuperMeshBase):
     J. Gu, et al., "ADEPT: Automatic Differentiable DEsign of Photonic Tensor Cores", DAC 2022
     https://arxiv.org/pdf/2112.08703.pdf
     """
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.set_gumbel_temperature()
@@ -975,13 +1080,21 @@ class SuperMeshADEPT(SuperMeshBase):
         self.sampling_coeff = torch.nn.Parameter(torch.zeros(self.n_blocks, 2) + 0.5)
         if self.n_front_share_blocks > 0:
             self.sampling_coeff.data[
-                self.n_blocks // 2 - self.n_front_share_blocks // 2 : self.n_blocks // 2, 0
+                self.n_blocks // 2 - self.n_front_share_blocks // 2 : self.n_blocks
+                // 2,
+                0,
             ] = -100
             self.sampling_coeff.data[
-                self.n_blocks // 2 - self.n_front_share_blocks // 2 : self.n_blocks // 2, 1
+                self.n_blocks // 2 - self.n_front_share_blocks // 2 : self.n_blocks
+                // 2,
+                1,
             ] = 100  # force to choose the block
-            self.sampling_coeff.data[-self.n_front_share_blocks // 2 :, 0] = -100  # force to choose the block
-            self.sampling_coeff.data[-self.n_front_share_blocks // 2 :, 1] = 100  # force to choose the block
+            self.sampling_coeff.data[
+                -self.n_front_share_blocks // 2 :, 0
+            ] = -100  # force to choose the block
+            self.sampling_coeff.data[-self.n_front_share_blocks // 2 :, 1] = (
+                100  # force to choose the block
+            )
 
     def set_gumbel_temperature(self, T: float = 5.0):
         self.gumbel_temperature = T
@@ -1039,10 +1152,13 @@ class SuperMeshADEPT(SuperMeshBase):
                     dim=-1,
                 )
                 logits = torch.cat(
-                    [logits_small, logits[:, -self.n_front_share_blocks // 2 :, :]], dim=1
+                    [logits_small, logits[:, -self.n_front_share_blocks // 2 :, :]],
+                    dim=1,
                 ).view(-1, 2)
             else:
-                logits = torch.cat([logits[..., 0:1] + 200, logits[..., 1:] - 200], dim=-1)
+                logits = torch.cat(
+                    [logits[..., 0:1] + 200, logits[..., 1:] - 200], dim=-1
+                )
             self.arch_mask = torch.nn.functional.gumbel_softmax(
                 logits,
                 tau=self.gumbel_temperature,
@@ -1068,7 +1184,9 @@ class SuperMeshADEPT(SuperMeshBase):
             super_layers_all.append(
                 SuperDCFrontShareLayer(
                     n_waveguides=self.n_waveguides,
-                    offset=i % 2 if self.interleave_dc else 0,  # interleaved design space
+                    offset=i % 2
+                    if self.interleave_dc
+                    else 0,  # interleaved design space
                     trainable=True,
                     binary=True,
                     device=self.device,
@@ -1096,10 +1214,12 @@ class SuperMeshADEPT(SuperMeshBase):
 
         return super_layers_all
 
-    def build_ps_layers(self, grid_dim_x: int, grid_dim_y: int) -> nn.ModuleList:
+    def build_ps_layers(
+        self, grid_dim_x: int, grid_dim_y: int, miniblock: Tuple[int], w_bit: int = 32
+    ) -> nn.ModuleList:
         ## each CONV or Linear need to explicit build ps layers as the main parameters using this function
         ## Assume conv and layer uses blocking matrix multiplication.
-        ## Each block can have a batch (i.e., grid_dim_y x grid_dim_x) of PS columns
+        ## Each block can have a batch (i.e., grid_dim_y x grid_dim_x, *miniblock) of PS columns
         self.share_ps = self.arch.get("share_ps", "global")
         self.interleave_dc = self.arch.get("interleave_dc", True)
         super_ps_layers = nn.ModuleList()
@@ -1112,6 +1232,8 @@ class SuperMeshADEPT(SuperMeshBase):
                 SuperBatchedPSLayer(
                     grid_dim_x=grid_dim_x,
                     grid_dim_y=grid_dim_y,
+                    miniblock=miniblock,
+                    w_bit=w_bit,
                     share_uv=share_uv,
                     n_waveguides=self.n_waveguides,
                     trainable=True,
@@ -1128,14 +1250,19 @@ class SuperMeshADEPT(SuperMeshBase):
             if isinstance(m, (SuperCRLayer,)):
                 m.reset_parameters(alg="identity")
 
-    def forward(self, x: Tensor, super_ps_layers: nn.ModuleList, first_chunk: bool = True) -> Tensor:
+    def forward(
+        self, x: Tensor, super_ps_layers: nn.ModuleList, first_chunk: bool = True
+    ) -> Tensor:
         """super_ps_layers: nn.ModuleList passed from each caller"""
         if first_chunk:
             # first half chunk is always used for V
             start_block, end_block = 0, self.sample_n_blocks // 2
         else:
             # second half chunk is always used for U
-            start_block, end_block = self.n_blocks // 2, self.n_blocks // 2 + self.sample_n_blocks // 2
+            start_block, end_block = (
+                self.n_blocks // 2,
+                self.n_blocks // 2 + self.sample_n_blocks // 2,
+            )
 
         # Fast mode: re-training with fixed arch
         if self.fast_mode:
@@ -1143,7 +1270,9 @@ class SuperMeshADEPT(SuperMeshBase):
                 index = self.fast_arch_mask[i]
                 if index == 1:
                     if super_ps_layers is not None:
-                        x = super_ps_layers[i](x)  # pass through independent phase shifters before each block
+                        x = super_ps_layers[i](
+                            x
+                        )  # pass through independent phase shifters before each block
                     for j in range(self.n_layers_per_block):
                         layer_idx = i * self.n_layers_per_block + j
                         x = self.super_layers_all[layer_idx](x)
@@ -1155,7 +1284,9 @@ class SuperMeshADEPT(SuperMeshBase):
             for i in range(start_block, end_block):
                 res = x
                 if super_ps_layers is not None:
-                    x = super_ps_layers[i](x)  # pass through independent phase shifters before each block
+                    x = super_ps_layers[i](
+                        x
+                    )  # pass through independent phase shifters before each block
 
                 for j in range(self.n_layers_per_block):
                     layer_idx = i * self.n_layers_per_block + j
@@ -1166,7 +1297,9 @@ class SuperMeshADEPT(SuperMeshBase):
                     x = self.arch_mask[i, 0] * res + self.arch_mask[i, 1] * x
                 else:
                     # x [bs, ....], mask [bs, ]
-                    arch_mask = self.arch_mask[:, i, :].view(-1, *([1] * (x.dim() - 1)), 2)
+                    arch_mask = self.arch_mask[:, i, :].view(
+                        -1, *([1] * (x.dim() - 1)), 2
+                    )
                     x = arch_mask[..., 0] * res + arch_mask[..., 1] * x
         else:  # inference, validation, test
             arch_mask = torch.nn.functional.gumbel_softmax(
@@ -1178,7 +1311,9 @@ class SuperMeshADEPT(SuperMeshBase):
             for i in range(start_block, end_block):
                 res = x
                 if super_ps_layers is not None:
-                    x = super_ps_layers[i](x)  # pass through independent phase shifters before each block
+                    x = super_ps_layers[i](
+                        x
+                    )  # pass through independent phase shifters before each block
 
                 for j in range(self.n_layers_per_block):
                     layer_idx = i * self.n_layers_per_block + j
@@ -1190,64 +1325,60 @@ class SuperMeshADEPT(SuperMeshBase):
         return x
 
     @lru_cache(maxsize=16)
-    def _build_probe_matrix(self, grid_dim_x: int, grid_dim_y: int):
+    def _build_probe_matrix(
+        self, grid_dim_x: int, grid_dim_y: int, miniblock: Tuple[int]
+    ):
+        ## miniblock here is the miniblock[:-2] from ONNBaselayer
+        eye = torch.eye(self.n_waveguides, dtype=torch.cfloat, device=self.device)[
+            (None,) * (2 + len(miniblock))
+        ]
         if self.share_ps == "global":
-            eye_U = eye_V = torch.eye(self.n_waveguides, dtype=torch.cfloat, device=self.device)
+            # [k1, ..., k2]
+            eye_U = eye_V = (
+                eye.expand(1, 1, *miniblock, -1, -1).movedim(-2, 0).contiguous()
+            )
         elif self.share_ps == "row_col":
+            # [k1, q, ..., k2]
             eye_V = (
-                torch.eye(self.n_waveguides, dtype=torch.cfloat, device=self.device)
-                .unsqueeze(0)
-                .expand(grid_dim_x, -1, -1)
-                .permute(1, 0, 2)
+                eye.expand(1, grid_dim_x, *miniblock, -1, -1)
+                .movedim(-2, 0)
                 .contiguous()
-            )  # [k,q,k]
+            )
+            # [k1, p, ..., k2]
             eye_U = (
-                torch.eye(self.n_waveguides, dtype=torch.cfloat, device=self.device)
-                .unsqueeze(0)
-                .expand(grid_dim_y, -1, -1)
-                .permute(1, 0, 2)
+                eye.expand(grid_dim_y, 1, *miniblock, -1, -1)
+                .movedim(-2, 0)
                 .contiguous()
-            )  # [k,p,k]
+            )
         elif self.share_ps == "none":
+            # [k1, p, q, ..., k2]
             eye_V = eye_U = (
-                torch.eye(self.n_waveguides, dtype=torch.cfloat, device=self.device)
-                .unsqueeze(0)
-                .unsqueeze(0)
-                .expand(grid_dim_y, grid_dim_x, -1, -1)
-                .permute(2, 0, 1, 3)
+                eye.expand(grid_dim_y, grid_dim_x, *miniblock, -1, -1)
+                .movedim(-2, 0)
                 .contiguous()
-            )  # [k,p,q,k]
+            )
+        else:
+            raise NotImplementedError
         return eye_U, eye_V
 
     def get_UV(
-        self, super_ps_layers: nn.ModuleList, grid_dim_x: int, grid_dim_y: int
+        self,
+        super_ps_layers: nn.ModuleList,
+        grid_dim_x: int,
+        grid_dim_y: int,
+        miniblock: Tuple[int],
     ) -> Tuple[Tensor, Tensor]:
         # return U and V
-        eye_U, eye_V = self._build_probe_matrix(grid_dim_x, grid_dim_y)
+        eye_U, eye_V = self._build_probe_matrix(
+            grid_dim_x, grid_dim_y, miniblock=miniblock
+        )
 
         # print(self.eye_V.size())
-        V = self.forward(eye_V, super_ps_layers, first_chunk=True)  # [k,k] or [k,q,k] or [k,p,q,k]
-        if V.dim() == 2:
-            # [k,k] -> [1,1,k,k]
-            V = V.unsqueeze(0).unsqueeze(0)
-        elif V.dim() == 3:
-            # [k,q,k] -> [1,q,k,k]
-            V = V.transpose(0, 1).unsqueeze(0)
-        elif V.dim() == 4:
-            # [k,p,q,k] -> [p,q,k,k]
-            V = V.permute(1, 2, 0, 3)
+        V = self.forward(eye_V, super_ps_layers, first_chunk=True)  # [k1,p,q,..., k2]
+        V = V.movedim(0, -2)  # [p,q,..., k1, k2]
 
-        U = self.forward(eye_U, super_ps_layers, first_chunk=False)  # [k,k] or [k,p,k] or [k,p,q,k]
-        # logger.info(U[:,0,:].conj().t().matmul(U[:,0,:]))
-        if U.dim() == 2:
-            # [k,k] -> [1,1,k,k]
-            U = U.unsqueeze(0).unsqueeze(0)
-        elif U.dim() == 3:
-            # [k,p,k] -> [p,1,k,k]
-            U = U.transpose(0, 1).unsqueeze(1)
-        elif U.dim() == 4:
-            # [k,p,q,k] -> [p,q,k,k]
-            U = U.permute(1, 2, 0, 3)
+        U = self.forward(eye_U, super_ps_layers, first_chunk=False)  # [k1,p,q,..., k2]
+        U = U.movedim(0, -2)  # [p,q,..., k1, k2]
 
         ## re-normalization to control the variance the relaxed U and V
         ## after permutaiton relaxation, U, V might not be unitary
@@ -1258,11 +1389,18 @@ class SuperMeshADEPT(SuperMeshBase):
             V = V / V.data.norm(p=2, dim=-2, keepdim=True)  # unit col L2 norm
         return U, V
 
-    def get_weight_matrix(self, super_ps_layers: nn.ModuleList, sigma: Tensor) -> Tensor:
-        # sigma [p, q, k], unique parameters for each caller
+    def get_weight_matrix(
+        self, super_ps_layers: nn.ModuleList, sigma: Tensor
+    ) -> Tensor:
+        # sigma [p, q, ..., k2], unique parameters for each caller
         # super_ps_layers, unique parameters for each caller
 
-        U, V = self.get_UV(super_ps_layers, grid_dim_x=sigma.size(1), grid_dim_y=sigma.size(0))
+        U, V = self.get_UV(
+            super_ps_layers,
+            grid_dim_x=sigma.size(1),
+            grid_dim_y=sigma.size(0),
+            miniblock=sigma.shape[2:-1],
+        )
 
         # U [1,1,k,k] or [p,1,k,k] or [p,q,k,k]
         # V [1,1,k,k] or [1,q,k,k] or [p,q,k,k]

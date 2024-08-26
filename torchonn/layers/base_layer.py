@@ -6,18 +6,18 @@ FilePath: /pytorch-onn/torchonn/layers/base_layer.py
 """
 
 import inspect
-from sched import scheduler
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from mmcv.cnn.bricks import build_activation_layer, build_conv_layer, build_norm_layer
 from mmengine.registry import MODELS
 from pyutils.general import logger
 from torch import Tensor, nn
 from torch.nn.modules.utils import _pair
-from torch.types import Device
-import torch.nn.functional as F
+from tqdm.auto import trange
+
 from .utils import partition_chunks
 
 __all__ = [
@@ -86,7 +86,6 @@ class ONNBaseLayer(nn.Module):
         else:
             for name in self.transform_registry:
                 if dst_name in self.transform_registry[name]:
-
                     raise ValueError(
                         f"output transform param {dst_name} already exists for source param {name}"
                     )
@@ -155,6 +154,21 @@ class ONNBaseLayer(nn.Module):
 
     def disable_fast_forward(self) -> None:
         self.fast_forward_flag = False
+
+    def set_weight_noise(
+        self, noise_std: float, random_state: Optional[int] = None
+    ) -> None:
+        self.weight_noise_std = noise_std
+
+    def set_input_noise(
+        self, noise_std: float, random_state: Optional[int] = None
+    ) -> None:
+        self.input_noise_std = noise_std
+
+    def set_output_noise(
+        self, noise_std: float, random_state: Optional[int] = None
+    ) -> None:
+        self.output_noise_std = noise_std
 
     def set_phase_variation(
         self, noise_std: float, random_state: Optional[int] = None
@@ -225,7 +239,7 @@ class ONNBaseLayer(nn.Module):
         if weights is None:
             weights = self.weights
         new_weights = {}
-        
+
         for src_name, weight in weights.items():
             if src_name in self.transform_registry:
                 for dst_name, transforms in self.transform_registry[src_name].items():
@@ -266,25 +280,44 @@ class ONNBaseLayer(nn.Module):
     def _output_transform(self, x: Tensor) -> Tensor:
         return x
 
-    def map_layer(self, target: Tensor, param_list: List, build_weight_fn: Callable, mode: str="regression", num_steps: int = 1000, optimizer: str="Adam", lr: float=1e-3, verbose:bool=False) -> None:
+    def map_layer(
+        self,
+        target: Tensor,
+        param_list: List,
+        build_weight_fn: Callable,
+        mode: str = "regression",
+        num_steps: int = 1000,
+        optimizer: str = "Adam",
+        lr: float = 1e-3,
+        verbose: bool = False,
+    ) -> None:
         if mode == "regression":
             if optimizer == "Adam":
                 optimizer = torch.optim.Adam(param_list, lr=lr)
             else:
                 raise NotImplementedError
-    
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_steps, eta_min=1e-2*lr)
-            
-            for i in range(num_steps):
+
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=num_steps, eta_min=1e-2 * lr
+            )
+
+            for i in trange(num_steps, desc="mapping layers via sgd..."):
                 optimizer.zero_grad()
                 weight = build_weight_fn()
-                        
-                loss = F.mse_loss(target, weight)
+
+                if torch.is_complex(weight):
+                    loss = F.mse_loss(
+                        torch.view_as_real(target), torch.view_as_real(weight)
+                    )
+                else:
+                    loss = F.mse_loss(target, weight)
                 loss.backward()
                 optimizer.step()
                 scheduler.step()
                 if verbose and (i % 500 == 0 or i == num_steps - 1):
-                    logger.info(f"Sync weight to phase: step = {i:5d}, mse = {loss.item():.2e}")
+                    logger.info(
+                        f"Sync weight to phase: step = {i:5d}, mse = {loss.item():.2e}"
+                    )
             optimizer.zero_grad()
         else:
             raise NotImplementedError
@@ -377,7 +410,6 @@ class ONNBaseConv2d(ONNBaseLayer):
         ), f"Currently group convolution is not supported, but got group: {self.groups}"
 
         if "miniblock" in self.__dict__:
-
             self.load_block_cfgs()
 
     def load_block_cfgs(self) -> None:
@@ -438,7 +470,7 @@ class ONNBaseConv2d(ONNBaseLayer):
             bias=bias,
             **cfgs,
         ).to(device)
-   
+
         if "miniblock" in instance.__dict__:
             weight = partition_chunks(
                 layer.weight.data.flatten(1), instance.weight.shape

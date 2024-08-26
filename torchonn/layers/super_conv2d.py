@@ -27,7 +27,8 @@ __all__ = ["SuperBlockConv2d"]
 @MODELS.register_module()
 class SuperBlockConv2d(ONNBaseConv2d):
     """
-    description: SVD-based Linear layer. Blocking matrix multiplication.
+    ADEPT Gu et al., DAC 2020.
+    description: USV-based Conv2d layer. Blocking matrix multiplication.
     """
 
     ## default configs
@@ -125,7 +126,6 @@ class SuperBlockConv2d(ONNBaseConv2d):
             self.grid_dim_y,
             self.grid_dim_x,
             *self.miniblock,
-            dtype=torch.cfloat,
             device=self.device,
         )
         self.S = torch.zeros(
@@ -238,6 +238,72 @@ class SuperBlockConv2d(ONNBaseConv2d):
             "output", "output", {"output_transform": self._output_transform}
         )
 
+    def build_weight_from_usv(self, U: Tensor, S: Tensor, V: Tensor) -> Tensor:
+        # differentiable feature is gauranteed
+        weight = U.matmul(S.unsqueeze(-1) * V)
+        self.weight.data.copy_(weight)
+        return weight
+
+    def build_usv_from_phase(self, super_ps_layers, S) -> Tuple[Tensor, Tensor]:
+        U, V = self.super_layer.get_UV(
+            super_ps_layers,
+            grid_dim_x=self.grid_dim_x,
+            grid_dim_y=self.grid_dim_y,
+            miniblock=self.miniblock[:-2],
+        )
+        self.U.data.copy_(U)
+        self.V.data.copy_(V)
+        return U, S, V
+
+    def sync_parameters(
+        self, src: str = "weight", steps: int = 3000, verbose: bool = False
+    ) -> None:
+        """
+        description: synchronize all parameters from the source parameters
+        """
+        if src == "phase":
+            self.super_layer.build_arch_mask(mode="gumbel_hard")
+            self.transform_weight(self.weights)
+        elif src == "usv":
+            self.build_weight_from_usv(self.U, self.S, self.V)
+            self.sync_parameters(src="weight")
+
+        elif src == "weight":
+            # weight to phase
+            target = self.weight.data
+            # first get optimal Singular value, and then perform gradient descent to solve
+            if self.device.type == "cpu":
+                S = torch.linalg.svdvals(target)
+            else:
+                S = torch.linalg.svdvals(
+                    target, driver="gesvd"
+                )  # must use QR decomposition
+            self.S.data.copy_(S)
+
+            param_list = list(self.super_ps_layers.parameters()) + [self.S]
+
+            target = merge_chunks(self.weight.data)[
+                : self.out_channels, : self.in_channels_flat
+            ].view(-1, self.in_channels, self.kernel_size[0], self.kernel_size[1])
+
+
+            def build_weight_fn():
+                self.super_layer.build_arch_mask(mode="gumbel_hard")
+                return self.transform_weight(self.weights)["weight"]
+
+            self.map_layer(
+                target=target,
+                param_list=param_list,
+                build_weight_fn=build_weight_fn,
+                mode="regression",
+                num_steps=steps,
+                verbose=verbose,
+            )
+            self.sync_parameters(src="phase")
+
+        else:
+            raise NotImplementedError
+
     def set_crosstalk_factor(self, crosstalk_factor: float) -> None:
         self.crosstalk_factor = crosstalk_factor
 
@@ -282,23 +348,14 @@ class SuperBlockConv2d(ONNBaseConv2d):
     ) -> Tensor:
         if self.mode == "phase":
             super_ps_layers, S = weights
-            U, V = self.super_layer.get_UV(
-                super_ps_layers,
-                grid_dim_x=S.size(1),
-                grid_dim_y=S.size(0),
-                miniblock=self.miniblock[:-2],
+            weight = self.build_weight_from_usv(
+                *self.build_usv_from_phase(super_ps_layers, S)
             )
-            print(U.shape, S.shape, V.shape)
-            # [p,q,k,k] x [p,q,k,k] -> [p,q,k,k]
-            self.U.data.copy_(U)
-            self.V.data.copy_(V)
-            weight = U.matmul(S.unsqueeze(-1).mul(V))
-            self.weight.data.copy_(weight)
+
         elif self.mode == "usv":
             _, S = weights
             U, V = self.U, self.V
-            weight = U.matmul(S.unsqueeze(-1).mul(V))
-            self.weight.data.copy_(weight)
+            weight = self.build_weight_from_usv(U, S, V)
         elif self.mode == "weight":
             weight = self.weight
         else:

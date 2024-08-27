@@ -247,6 +247,14 @@ class FFTONNBlockLinear(ONNBaseLinear):
             mode="tensor_wise",
         )
 
+        self.quantizer_dict = {
+            "input": self.input_quantizer,
+            "phase_U": self.phase_U_quantizer,
+            "phase_V": self.phase_V_quantizer,
+            "S": None,
+            "output": self.output_quantizer,
+        }
+
         ## add input transform
         self.add_transform("input", "input", {"input_transform": self._input_transform})
 

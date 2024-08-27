@@ -191,6 +191,12 @@ class TeMPOBlockLinear(ONNBaseLinear):
             mode="tensor_wise",
         )
 
+        self.quantizer_dict = {
+            "input": self.input_quantizer,
+            "weight": self.weight_quantizer,
+            "output": self.output_quantizer,
+        }
+
         ## add input transform
         self.add_transform("input", "input", {"input_transform": self._input_transform})
 

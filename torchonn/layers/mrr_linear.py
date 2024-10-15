@@ -160,7 +160,7 @@ class AddDropMRRBlockLinear(ONNBaseLinear):
             abs(self.mrr_tr_to_weight(mrr_tr_min)),
             abs(self.mrr_tr_to_weight(mrr_tr_max)),
         )  # [-0.98, 0.92] -> 0.92
-
+    
     def get_param_buffer_groups(self, mode: str) -> Tensor:
         buffer_groups = {
             "phase": self.phase,

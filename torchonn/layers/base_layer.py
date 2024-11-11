@@ -666,7 +666,7 @@ class ONNBaseLayer(nn.Module):
 
         ## add bias
         if self.bias is not None:
-            out = out + self.bias.reshape([-1] + [1] * (out.dim() - 2))
+            out = out + self.bias.reshape([1] * (out.dim() - 2) + [-1])
 
         return out
 
@@ -734,9 +734,9 @@ class ONNBaseConv2d(ONNBaseLayer):
         self.stride = _pair(self.stride)
         self.padding = _pair(self.padding)
         self.dilation = _pair(self.dilation)
-        assert (
-            self.groups == 1
-        ), f"Currently group convolution is not supported, but got group: {self.groups}"
+        # assert (
+        #     self.groups == 1
+        # ), f"Currently group convolution is not supported, but got group: {self.groups}"
 
         if "miniblock" in self.__dict__:
             self.load_block_cfgs()
@@ -778,7 +778,7 @@ class ONNBaseConv2d(ONNBaseLayer):
         assert isinstance(
             layer, nn.Conv2d
         ), f"The conversion target must be nn.Conv2d, but got {type(layer)}."
-        in_channels = layer.in_channels
+        in_channels = layer.in_channels // layer.groups
         out_channels = layer.out_channels
         kernel_size = layer.kernel_size
         stride = layer.stride
@@ -1133,10 +1133,54 @@ def convert_conv_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
     return layer
 
 
+
+def conver_matmul_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
+    if cfg is None:
+        cfg_ = dict(type="Matmul")
+    else:
+        if not isinstance(cfg, dict):
+            raise TypeError("cfg must be a dict")
+        if "type" not in cfg:
+            raise KeyError('the cfg dict must contain the key "type"')
+        cfg_ = cfg.copy()
+
+    layer_type = cfg_.pop("type")
+
+    try:
+        device = next(ref_layer.parameters()).device
+    except:
+        device = torch.device("cuda:0")
+
+    if inspect.isclass(layer_type):
+        assert hasattr(
+            layer_type, "from_layer"
+        ), f"{layer_type} does not have a from_layer method for conversion"
+        return layer_type.from_layer(ref_layer, **cfg_).to(device)
+    # Switch registry to the target scope. If `matmul_layer` cannot be found
+    # in the registry, fallback to search `matmul_layer` in the
+    # mmengine.MODELS.
+    with MODELS.switch_scope_and_registry(None) as registry:
+        matmul_layer = registry.get(layer_type)
+    if matmul_layer is None:
+        raise KeyError(
+            f"Cannot find {matmul_layer} in registry under scope "
+            f"name {registry.scope}"
+        )
+    assert hasattr(
+        matmul_layer, "from_layer"
+    ), f"{matmul_layer} does not have a from_layer method for conversion"
+    layer = matmul_layer.from_layer(ref_layer, **cfg_).to(device)
+
+    return layer
+
+from ..models.mobilevit import MatMulModule
+
 def convert_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
     if isinstance(ref_layer, nn.Conv2d):
         return convert_conv_layer(ref_layer, cfg)
     elif isinstance(ref_layer, nn.Linear):
         return convert_linear_layer(ref_layer, cfg)
+    elif isinstance(ref_layer, MatMulModule):
+        return conver_matmul_layer(ref_layer, cfg)
     else:
         raise NotImplementedError(f"Conversion for {type(ref_layer)} is not supported")

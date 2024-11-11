@@ -158,7 +158,7 @@ class TeMPOBlockConv2d(ONNBaseConv2d):
             self.in_channels,
             self.out_channels,
             self.kernel_size,
-            groups=self.groups,
+            # groups=self.groups,
         ).weight.data.to(self.device)
         W = partition_chunks(W.flatten(1), self.weight.shape)
 

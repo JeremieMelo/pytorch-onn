@@ -5,6 +5,7 @@ Date: 2021-06-08 23:21:35
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-08 23:21:35
 """
+
 #!/usr/bin/env python3
 # coding=UTF-8
 import argparse
@@ -16,22 +17,22 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from core import builder
+from pyutils.config import configs
 from pyutils.general import AverageMeter
 from pyutils.general import logger as lg
 from pyutils.metric import accuracy
+from pyutils.optimizer import SAM
 from pyutils.torch_train import (
     BestKModelSaver,
     count_parameters,
+    disable_bn,
+    enable_bn,
     get_learning_rate,
     load_model,
     set_torch_deterministic,
-    enable_bn,
-    disable_bn,
 )
 from pyutils.typing import Criterion, DataLoader, Optimizer, Scheduler
-from pyutils.config import configs
-from pyutils.optimizer import SAM
-from core import builder
 
 
 def train_one_epoch(
@@ -146,7 +147,8 @@ def main() -> None:
         set_torch_deterministic()
 
     model = builder.make_model(
-        device, int(configs.run.random_state) if int(configs.run.deterministic) else None
+        device,
+        int(configs.run.random_state) if int(configs.run.deterministic) else None,
     )
 
     train_loader, validation_loader = builder.make_dataloader()
@@ -159,7 +161,10 @@ def main() -> None:
 
     model_name = f"{configs.model.name}"
     checkpoint = f"./checkpoint/{configs.checkpoint.checkpoint_dir}/{model_name}"
-    if hasattr(configs.checkpoint, "model_comment") and len(configs.checkpoint.model_comment) > 0:
+    if (
+        hasattr(configs.checkpoint, "model_comment")
+        and len(configs.checkpoint.model_comment) > 0
+    ):
         checkpoint += f"_{configs.checkpoint.model_comment}.pt"
 
     lg.info(f"Current checkpoint: {checkpoint}")

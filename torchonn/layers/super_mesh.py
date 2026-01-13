@@ -1080,18 +1080,18 @@ class SuperMeshADEPT(SuperMeshBase):
         self.sampling_coeff = torch.nn.Parameter(torch.zeros(self.n_blocks, 2) + 0.5)
         if self.n_front_share_blocks > 0:
             self.sampling_coeff.data[
-                self.n_blocks // 2 - self.n_front_share_blocks // 2 : self.n_blocks
-                // 2,
+                self.n_blocks // 2
+                - self.n_front_share_blocks // 2 : self.n_blocks // 2,
                 0,
             ] = -100
             self.sampling_coeff.data[
-                self.n_blocks // 2 - self.n_front_share_blocks // 2 : self.n_blocks
-                // 2,
+                self.n_blocks // 2
+                - self.n_front_share_blocks // 2 : self.n_blocks // 2,
                 1,
             ] = 100  # force to choose the block
-            self.sampling_coeff.data[
-                -self.n_front_share_blocks // 2 :, 0
-            ] = -100  # force to choose the block
+            self.sampling_coeff.data[-self.n_front_share_blocks // 2 :, 0] = (
+                -100
+            )  # force to choose the block
             self.sampling_coeff.data[-self.n_front_share_blocks // 2 :, 1] = (
                 100  # force to choose the block
             )
@@ -1184,9 +1184,9 @@ class SuperMeshADEPT(SuperMeshBase):
             super_layers_all.append(
                 SuperDCFrontShareLayer(
                     n_waveguides=self.n_waveguides,
-                    offset=i % 2
-                    if self.interleave_dc
-                    else 0,  # interleaved design space
+                    offset=(
+                        i % 2 if self.interleave_dc else 0
+                    ),  # interleaved design space
                     trainable=True,
                     binary=True,
                     device=self.device,

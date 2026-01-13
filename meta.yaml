@@ -33,7 +33,7 @@ requirements:
     - pytorch-cuda=11.8
     - matplotlib
     - tensorflow-gpu=2.14.0
-    - svglib 
+    - svglib
     - scipy >=1.5.4
     - scikit-learn >=0.24.1
     - pyyaml
@@ -50,7 +50,7 @@ requirements:
     - pytorch-cuda=11.8
     - matplotlib
     - tensorflow-gpu=2.14.0
-    - svglib 
+    - svglib
     - scipy >=1.5.4
     - scikit-learn >=0.24.1
     - pyyaml

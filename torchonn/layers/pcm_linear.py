@@ -6,6 +6,7 @@ LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 Description:
 FilePath: /projects/ELight/core/models/layers/pcm_linear.py
 """
+
 import logging
 import math  # some math operations
 
@@ -15,6 +16,7 @@ from pyutils.quantize import input_quantize_fn
 from torch import Tensor
 from torch.nn import Parameter, init
 from torch.types import Device
+
 from torchonn.op.pcm_op import (
     weight_quantize_fn_log,
     weight_to_quantized_weight,
@@ -113,11 +115,16 @@ class PCMLinear(ONNBaseLayer):
         else:
             raise NotImplementedError
 
-        assign_zero_value = 2 ** self.w_bit - 1
+        assign_zero_value = 2**self.w_bit - 1
 
         if self.assign and (self.w_bit < 16):
             self.assign_converter = weight_to_quantized_weight(
-                self.w_bit, 1 - self.pcm_l, True, self.assign, assign_zero_value, loss_fn
+                self.w_bit,
+                1 - self.pcm_l,
+                True,
+                self.assign,
+                assign_zero_value,
+                loss_fn,
             )
             self.real_assign_converter = weight_to_quantized_weight_cpu(
                 self.w_bit, 1 - self.pcm_l, True, self.assign, assign_zero_value
@@ -137,7 +144,9 @@ class PCMLinear(ONNBaseLayer):
 
     def build_parameters(self) -> None:
         if self.mode in {"weight"}:
-            self.weight = torch.Tensor(self.out_features, self.in_features).to(self.device)
+            self.weight = torch.Tensor(self.out_features, self.in_features).to(
+                self.device
+            )
             self.weight = Parameter(self.weight)
         elif self.mode == "block":
             self.weight = Parameter(
@@ -149,7 +158,9 @@ class PCMLinear(ONNBaseLayer):
                 )
             )
         else:
-            self.weight = Parameter(torch.Tensor(self.out_features, self.in_features).to(self.device))
+            self.weight = Parameter(
+                torch.Tensor(self.out_features, self.in_features).to(self.device)
+            )
 
     def reset_parameters(self) -> None:
         init.kaiming_normal_(self.weight.data, mode="fan_out", nonlinearity="relu")
@@ -222,14 +233,23 @@ class PCMLinear(ONNBaseLayer):
         if self.block_mul_flag == True:
             p, q, k, k = self.weight.size()
             weight = self.weight.view(p * q, -1)
-            weight = self.assign_converter(weight)  # transfer weight to transmission levels
-            base = torch.mean(weight, dim=0, keepdim=True).detach()  # get one global reference block
+            weight = self.assign_converter(
+                weight
+            )  # transfer weight to transmission levels
+            base = torch.mean(
+                weight, dim=0, keepdim=True
+            ).detach()  # get one global reference block
             ref = base.repeat(p * q, 1)
 
             if loss_flag:
                 loss = F.l1_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.l1_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.l1_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 self.block_full_differences = tmp.cpu().numpy().tolist()
         else:
             loss = 0
@@ -245,13 +265,20 @@ class PCMLinear(ONNBaseLayer):
             p, q, k, k = self.weight.size()
             weight = self.weight.view(p * q, -1)
             weight = self.assign_converter(weight)
-            base = torch.mean(weight, dim=0, keepdim=True).detach()  # get one global reference block
+            base = torch.mean(
+                weight, dim=0, keepdim=True
+            ).detach()  # get one global reference block
             ref = base.repeat(p * q, 1)
 
             if loss_flag:
                 loss = F.mse_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.mse_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.mse_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 self.block_full_differences_real = tmp.cpu().numpy().tolist()
         else:
             loss = 0
@@ -281,11 +308,18 @@ class PCMLinear(ONNBaseLayer):
             if loss_flag:
                 loss = F.l1_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.l1_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.l1_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.block_avr_differences_row = []
                 for i in range(p):
-                    self.block_avr_differences_row.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.block_avr_differences_row.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 
@@ -312,11 +346,18 @@ class PCMLinear(ONNBaseLayer):
             if loss_flag:
                 loss = F.mse_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.mse_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.mse_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.block_avr_differences_row_real = []
                 for i in range(p):
-                    self.block_avr_differences_row_real.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.block_avr_differences_row_real.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 
@@ -338,7 +379,9 @@ class PCMLinear(ONNBaseLayer):
             weight_ref = weight.detach().clone()
 
             for i in range(p):
-                base = torch.mean(weight[i * q : i * q + q], dim=0, keepdim=True).detach()
+                base = torch.mean(
+                    weight[i * q : i * q + q], dim=0, keepdim=True
+                ).detach()
                 indices[i * q] = p * q + i
                 weight_ref = torch.cat((weight_ref, base), 0)
 
@@ -347,11 +390,18 @@ class PCMLinear(ONNBaseLayer):
             if loss_flag:
                 loss = F.mse_loss(weight, weight_ref, reduction="mean")
             else:
-                tmp = F.mse_loss(weight, weight_ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.mse_loss(weight, weight_ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.block_avr_differences_row_real = []
                 for i in range(p):
-                    self.block_avr_differences_row_real.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.block_avr_differences_row_real.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 
@@ -382,11 +432,18 @@ class PCMLinear(ONNBaseLayer):
             if loss_flag:
                 loss = F.l1_loss(weight, weight_ref, reduction="mean")
             else:
-                tmp = F.l1_loss(weight, weight_ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.l1_loss(weight, weight_ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.programming_levels_avr_row_real = []
                 for i in range(p):
-                    self.programming_levels_avr_row_real.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.programming_levels_avr_row_real.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 

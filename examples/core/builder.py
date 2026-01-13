@@ -10,6 +10,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from core.models import *
 from pyutils.config import configs
 from pyutils.datasets import get_dataset
 from pyutils.general import logger
@@ -18,8 +19,6 @@ from pyutils.lr_scheduler import CosineAnnealingWarmupRestarts
 from pyutils.optimizer import SAM, RAdam
 from pyutils.typing import DataLoader, Optimizer, Scheduler
 from torch.types import Device
-
-from core.models import *
 
 __all__ = [
     "make_dataloader",
@@ -129,7 +128,11 @@ def make_optimizer(model: nn.Module, name: str = None) -> Optimizer:
             base_optimizer=base_optimizer,
             rho=getattr(configs.optimizer, "rho", 0.5),
             adaptive=getattr(configs.optimizer, "adaptive", True),
-            **{k: v for k, v in configs.optimizer.base_optimizer.dict().items() if k != "name"}
+            **{
+                k: v
+                for k, v in configs.optimizer.base_optimizer.dict().items()
+                if k != "name"
+            }
         )
     else:
         raise NotImplementedError(name)
@@ -140,10 +143,14 @@ def make_optimizer(model: nn.Module, name: str = None) -> Optimizer:
 def make_scheduler(optimizer: Optimizer) -> Scheduler:
     name = configs.scheduler.name.lower()
     if name == "constant":
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 1)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lr_lambda=lambda epoch: 1
+        )
     elif name == "cosine":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=configs.run.n_epochs, eta_min=getattr(configs, "scheduler.lr_min", 0)
+            optimizer,
+            T_max=configs.run.n_epochs,
+            eta_min=getattr(configs, "scheduler.lr_min", 0),
         )
     elif name == "warmup_cosine":
         scheduler = CosineAnnealingWarmupRestarts(
@@ -154,7 +161,9 @@ def make_scheduler(optimizer: Optimizer) -> Scheduler:
             warmup_steps=getattr(configs, "scheduler.n_warm_epochs", 5),
         )
     elif name == "exp":
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=configs.scheduler.lr_gamma)
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=configs.scheduler.lr_gamma
+        )
     else:
         raise NotImplementedError(name)
 
@@ -171,9 +180,12 @@ def make_criterion() -> nn.Module:
         criterion = nn.L1Loss()
     elif name == "ce":  # cross-entropy
         criterion = nn.CrossEntropyLoss()
-    elif name == "kll_mixed":  # knowledge distillation loss with soft KL divegence and hard CE loss
+    elif (
+        name == "kll_mixed"
+    ):  # knowledge distillation loss with soft KL divegence and hard CE loss
         criterion = KLLossMixed(
-            T=getattr(configs.criterion, "temperature", 1), alpha=getattr(configs.criterion, "alpha", 0.9)
+            T=getattr(configs.criterion, "temperature", 1),
+            alpha=getattr(configs.criterion, "alpha", 0.9),
         )
     elif name == "adaptive_loss_soft":  # alphaNet, adaptive alpha divergence
         criterion = AdaptiveLossSoft(

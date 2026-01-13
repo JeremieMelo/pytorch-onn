@@ -140,7 +140,9 @@ class FFTONNBlockConv2d(ONNBaseConv2d):
             self.grid_dim_x,
             *self.miniblock[:-1],
             dtype=torch.cfloat,
-        ).to(self.device)  # complex frequency-domain weights
+        ).to(
+            self.device
+        )  # complex frequency-domain weights
         self.Tr = TrainableButterfly(
             length=self.miniblock[-1],
             reverse=True,

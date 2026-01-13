@@ -37,6 +37,7 @@ __all__ = [
     "convert_layer",
 ]
 
+
 # The base class for ONNBaseMatMul
 class ONNMatMulBase(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -181,7 +182,6 @@ class ONNMatMulBase(nn.Module):
             del self.transform_registry[src_mode]
             self.transform_registry[mode] = transforms
 
-
     def transform_matrix_A(self, x: Tensor) -> Tensor:
         ## forward matrix A through transform, e.g., reparameterization, quantization, pruning, adding noise etc.
         ## x -> return x
@@ -190,7 +190,7 @@ class ONNMatMulBase(nn.Module):
                 if flag:
                     x = transform(x)
         return x
-    
+
     def transform_matrix_B(self, x: Tensor) -> Tensor:
         ## forward matrix B through transform, e.g., reparameterization, quantization, pruning, adding noise etc.
         ## x -> return x
@@ -266,6 +266,7 @@ class ONNMatMulBase(nn.Module):
     def extra_repr(self) -> str:
         return ""
 
+
 class ONNBaseMatMul(ONNMatMulBase):
     # Default configurations
     default_cfgs = dict(
@@ -307,36 +308,38 @@ class ONNBaseMatMul(ONNMatMulBase):
 
     def compute_block_cfgs(self, matrix_A_dim, matrix_B_dim):
         # Compute grid dimensions and padding amounts based on actual dimensions
-        
+
         self.grid_dim_x = int(torch.ceil(matrix_A_dim / self.miniblock_dim_x))
         self.grid_dim_y = int(torch.ceil(matrix_B_dim / self.miniblock_dim_y))
 
         self.x_dim_pad = self.grid_dim_x * self.miniblock_dim_x
         self.y_dim_pad = self.grid_dim_y * self.miniblock_dim_y
-    
+
     @classmethod
     def from_layer(
         cls,
         layer: nn.Module,
         **cfgs,
     ) -> nn.Module:
-    
+
         assert isinstance(
             layer, nn.Module
         ), f"The conversion target must be nn.Module, but got {type(layer)}."
-        
-        instance = cls(**cfgs,)
-        
+
+        instance = cls(
+            **cfgs,
+        )
+
         return instance
-        
+
     def forward(self, matrix_A: Tensor, matrix_B: Tensor) -> Tensor:
         matrix_A_dim = matrix_A.shape[1]
         matrix_B_dim = matrix_B.shape[1]
         self.compute_block_cfgs(matrix_A_dim, matrix_B_dim)
-        
+
         ## preprocess matrix A
         ma = self.transform_matrix_A(matrix_A)
-        
+
         ## preprocess matrix B
         mb = self.transform_matrix_B(matrix_B)
 
@@ -345,9 +348,9 @@ class ONNBaseMatMul(ONNMatMulBase):
 
         ## postprocess output
         out = self.transform_output(out)
-        
+
         return out
-    
+
     def extra_repr(self):
         s = ""
         if self.miniblock is not None:
@@ -982,6 +985,7 @@ def build_linear_layer(cfg: Optional[Dict], *args, **kwargs) -> nn.Module:
 
     return layer
 
+
 def build_matmul_layer(cfg: Optional[Dict], *args, **kwargs) -> nn.Module:
     if cfg is None:
         cfg_ = dict(type="MatMul")
@@ -1008,6 +1012,7 @@ def build_matmul_layer(cfg: Optional[Dict], *args, **kwargs) -> nn.Module:
     layer = matmul_layer(*args, **kwargs, **cfg_)
 
     return layer
+
 
 def convert_matmul_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
     if cfg is None:
@@ -1044,6 +1049,7 @@ def convert_matmul_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module
     ), f"{matmul_layer} does not have a from_layer method for conversion"
     layer = matmul_layer.from_layer(ref_layer, **cfg_)
     return layer
+
 
 def convert_linear_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
     if cfg is None:
@@ -1133,7 +1139,6 @@ def convert_conv_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
     return layer
 
 
-
 def conver_matmul_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
     if cfg is None:
         cfg_ = dict(type="Matmul")
@@ -1173,7 +1178,9 @@ def conver_matmul_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
 
     return layer
 
+
 from ..models.mobilevit import MatMulModule
+
 
 def convert_layer(ref_layer: nn.Module, cfg: Optional[Dict]) -> nn.Module:
     if isinstance(ref_layer, nn.Conv2d):

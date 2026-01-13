@@ -5,12 +5,14 @@ Date: 2021-06-09 23:08:54
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-09 23:08:54
 """
+
 import unittest
-from pyutils.general import TimerCtx
-import torch
+
 import numpy as np
+import torch
+from pyutils.general import TimerCtx, logger
+
 import torchonn as onn
-from pyutils.general import logger
 
 
 class TestOp(unittest.TestCase):
@@ -30,7 +32,9 @@ class TestOp(unittest.TestCase):
             with TimerCtx() as t:
                 for _ in range(T):
                     delta_list, phi_mat = decomposer.decompose(U.clone().cpu())
-            print(f"\nAlg {alg}: \n\tCPU  decompose {tuple(U.size())} unitary: {t.interval/T:.6f} s")
+            print(
+                f"\nAlg {alg}: \n\tCPU  decompose {tuple(U.size())} unitary: {t.interval/T:.6f} s"
+            )
             assert np.allclose(delta_list.cpu().numpy(), delta_list_gold.numpy())
             assert np.allclose(phi_mat.cpu().numpy(), phi_mat_gold.numpy())
 
@@ -43,9 +47,14 @@ class TestOp(unittest.TestCase):
                     delta_list, phi_mat = decomposer.decompose(U.clone())
                 torch.cuda.synchronize()
             print(f"\tCUDA decompose {tuple(U.size())} unitary: {t.interval/T:.6f} s")
-            assert np.allclose(delta_list.cpu().numpy(), delta_list_gold.numpy(), rtol=1e-4, atol=1e-5)
-            assert np.allclose(phi_mat.cpu().numpy(), phi_mat_gold.numpy(), rtol=1e-4, atol=1e-5), print(
-                "max abs error:", np.abs(phi_mat.cpu().numpy() - phi_mat_gold.numpy()).max()
+            assert np.allclose(
+                delta_list.cpu().numpy(), delta_list_gold.numpy(), rtol=1e-4, atol=1e-5
+            )
+            assert np.allclose(
+                phi_mat.cpu().numpy(), phi_mat_gold.numpy(), rtol=1e-4, atol=1e-5
+            ), print(
+                "max abs error:",
+                np.abs(phi_mat.cpu().numpy() - phi_mat_gold.numpy()).max(),
             )
 
             ###### reconstruct ########
@@ -54,10 +63,12 @@ class TestOp(unittest.TestCase):
             with TimerCtx() as t:
                 for _ in range(T):
                     Ur = decomposer.reconstruct(delta_list, phi_mat)
-            print(f"\nAlg {alg}: \n\tCPU  reconstruct {tuple(Ur.size())} unitary: {t.interval/T:.6f} s")
-            assert np.allclose(Ur.cpu().numpy(), U.cpu().numpy(), rtol=1e-4, atol=1e-5), print(
-                "max abs error:", np.abs(Ur.cpu().numpy() - U.cpu().numpy()).max()
+            print(
+                f"\nAlg {alg}: \n\tCPU  reconstruct {tuple(Ur.size())} unitary: {t.interval/T:.6f} s"
             )
+            assert np.allclose(
+                Ur.cpu().numpy(), U.cpu().numpy(), rtol=1e-4, atol=1e-5
+            ), print("max abs error:", np.abs(Ur.cpu().numpy() - U.cpu().numpy()).max())
 
             delta_list, phi_mat = delta_list.cuda(), phi_mat.cuda()
             for _ in range(5):  # warm GPU
@@ -67,10 +78,12 @@ class TestOp(unittest.TestCase):
                 for _ in range(T):
                     Ur = decomposer.reconstruct(delta_list, phi_mat)
                 torch.cuda.synchronize()
-            print(f"\tCUDA reconstruct {tuple(Ur.size())} unitary: {t.interval/T:.6f} s")
-            assert np.allclose(Ur.cpu().numpy(), U.cpu().numpy(), rtol=1e-4, atol=1e-5), print(
-                "max abs error:", np.abs(Ur.cpu().numpy() - U.cpu().numpy()).max()
+            print(
+                f"\tCUDA reconstruct {tuple(Ur.size())} unitary: {t.interval/T:.6f} s"
             )
+            assert np.allclose(
+                Ur.cpu().numpy(), U.cpu().numpy(), rtol=1e-4, atol=1e-5
+            ), print("max abs error:", np.abs(Ur.cpu().numpy() - U.cpu().numpy()).max())
 
 
 if __name__ == "__main__":

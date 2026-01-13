@@ -6,32 +6,28 @@ LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-10 03:39:01
 """
 
-from tabnanny import verbose
 import unittest
+from tabnanny import verbose
 
 import numpy as np
 import torch
 from torch import nn
 
-from torchonn.layers import (
-    # AllPassMORRCirculantLinear,
-    # AllPassMORRCirculantConv2d,
-    # AddDropMRRConv2d,
+from torchonn.layers import (  # AllPassMORRCirculantLinear,; AllPassMORRCirculantConv2d,; AddDropMRRConv2d,; MZIConv2d,; MZILinear,
     AddDropMRRBlockConv2d,
     AddDropMRRBlockLinear,
     FFTONNBlockConv2d,
     FFTONNBlockLinear,
-    # MZIConv2d,
-    # MZILinear,
     MZIBlockConv2d,
     MZIBlockLinear,
-    TeMPOBlockLinear,
-    TeMPOBlockConv2d,
     SuperBlockConv2d,
     SuperBlockLinear,
-    super_layer_name_dict,
+    TeMPOBlockConv2d,
+    TeMPOBlockLinear,
     TeMPOBlockMatMul,
+    super_layer_name_dict,
 )
+
 
 class MatMulModule(nn.Module):
     def __init__(self):
@@ -114,8 +110,6 @@ class TestLayers(unittest.TestCase):
 
     #     assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), print("max abs error:", np.abs(y1 - y2).max())
 
-
-
     def test_matmul(self):
         device = torch.device("cuda:0")
         mm = MatMulModule().to(device)
@@ -126,7 +120,7 @@ class TestLayers(unittest.TestCase):
         z = mm(x, y)
         loss = z.sum()
         loss.backward()
-    
+
     def test_tempo_matmul(self):
         device = torch.device("cuda:0")
         mm = TeMPOBlockMatMul(miniblock=4, device=device)
@@ -167,8 +161,6 @@ class TestLayers(unittest.TestCase):
         # print(y2)
 
         # assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), f"converted result max abs error: {(y1 - y2).abs().max().item()}"
-
-        
 
     # def test_allpassmorrcirculantlinear(self):
     #     device = torch.device("cuda:0")

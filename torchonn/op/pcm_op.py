@@ -12,36 +12,41 @@ import torch
 from torch import Tensor, nn
 from torch.types import Device
 
-__all__ = ["weight_quantize_fn_log", "weight_to_quantized_weight", "weight_to_quantized_weight_cpu"]
+__all__ = [
+    "weight_quantize_fn_log",
+    "weight_to_quantized_weight",
+    "weight_to_quantized_weight_cpu",
+]
+
 
 # auto grad weight quantziation func
 def weight_quantization(b, power, power_base, assign):
     def efficient_power_quant(x, power_base, b, assign):
         if assign:
             # w = w_pos - w_neg as we use positive and nagative PTCs to represent weight
-            ref_value = power_base ** (2 ** b - 1)  # smallest trasmission factor
+            ref_value = power_base ** (2**b - 1)  # smallest trasmission factor
             scaleQuantLevel = 1 - ref_value
 
             x = x.mul(scaleQuantLevel)
 
             # obtain the quant level
             x_q_levels_l = torch.clamp(
-                torch.floor(torch.log(x + ref_value) / np.log(power_base)), 0, 2 ** b - 1
+                torch.floor(torch.log(x + ref_value) / np.log(power_base)), 0, 2**b - 1
             )
             x_q_levels_u = torch.clamp(
-                torch.ceil(torch.log(x + ref_value) / np.log(power_base)), 0, 2 ** b - 1
+                torch.ceil(torch.log(x + ref_value) / np.log(power_base)), 0, 2**b - 1
             )
 
             # convert to uniform domain
-            x_q_l = power_base ** x_q_levels_l
-            x_q_u = power_base ** x_q_levels_u
+            x_q_l = power_base**x_q_levels_l
+            x_q_u = power_base**x_q_levels_u
 
             # generate fake max level mask
-            x_q_l_mask = x_q_l < (power_base ** (2 ** b - 1))
-            x_q_u_mask = x_q_u < (power_base ** (2 ** b - 1))
+            x_q_l_mask = x_q_l < (power_base ** (2**b - 1))
+            x_q_u_mask = x_q_u < (power_base ** (2**b - 1))
 
             # replace the fake max level in low level with 2**b - 1
-            x_q_l[x_q_l_mask] = power_base ** (2 ** b - 1)
+            x_q_l[x_q_l_mask] = power_base ** (2**b - 1)
             x_q_u[x_q_u_mask] = 0
 
             # stack low and up bound
@@ -71,7 +76,9 @@ def weight_quantization(b, power, power_base, assign):
             input_abs /= alpha  # scale value to 0-1
 
             if power:
-                input_q = efficient_power_quant(input_abs, power_base, b, assign).mul(sign)
+                input_q = efficient_power_quant(input_abs, power_base, b, assign).mul(
+                    sign
+                )
             else:
                 raise NotImplementedError
 
@@ -115,12 +122,17 @@ class weight_quantize_fn_log(nn.Module):
         self.w_bit = w_bit
         self.power = power
         self.power_base = power_base
-        self.has_zero = has_zero  # whether implement 0 based on postive and negative PTCs
+        self.has_zero = (
+            has_zero  # whether implement 0 based on postive and negative PTCs
+        )
         self.assign = assign
         self.device = device
 
         self.weight_q = weight_quantization(
-            b=self.w_bit, power=self.power, power_base=self.power_base, assign=self.assign
+            b=self.w_bit,
+            power=self.power,
+            power_base=self.power_base,
+            assign=self.assign,
         )
 
         self.quant_range = quant_range
@@ -129,7 +141,10 @@ class weight_quantize_fn_log(nn.Module):
         if bit != self.w_bit:
             self.w_bit = bit
             self.weight_q = weight_quantization(
-                b=self.w_bit, power=self.power, power_base=self.power_base, assign=self.assign
+                b=self.w_bit,
+                power=self.power,
+                power_base=self.power_base,
+                assign=self.assign,
             )
 
     def forward(self, weight: Tensor) -> Tensor:
@@ -177,15 +192,15 @@ def convert_weight_to_levels(
             negative_zero_mask = torch.logical_and(sign_mask, x_zero_mask)
             # print(negative_zero_mask)
 
-            x_pos[negative_zero_mask] = 2 ** bits - 1
+            x_pos[negative_zero_mask] = 2**bits - 1
             x_neg[negative_zero_mask] = 0
 
         else:
             raise NotImplementedError
 
         # inverse the size of levels such that it follows the same in the ori weight domain: 1 -> max level
-        x_pos = 2 ** bits - 1 - x_pos
-        x_neg = -(2 ** bits) + 1 + x_neg
+        x_pos = 2**bits - 1 - x_pos
+        x_neg = -(2**bits) + 1 + x_neg
 
         if loss_fn == "l1":
             x_q_levels_p_n = x_pos + x_neg
@@ -198,8 +213,8 @@ def convert_weight_to_levels(
 
     def uniform_quant(x, bits):
         # must be scaled to 0-1 before this function
-        x = x.mul((2 ** bits - 1))
-        x_q = x.round().div(2 ** bits - 1)
+        x = x.mul((2**bits - 1))
+        x_q = x.round().div(2**bits - 1)
         x_q_levels = x.round()
 
         return x_q, x_q_levels
@@ -212,20 +227,24 @@ def convert_weight_to_levels(
             bits: bits
         """
         if assign:
-            ref_value = base ** (2 ** bits - 1)
+            ref_value = base ** (2**bits - 1)
             scaleQuantLevel = 1 - ref_value
             x = x.mul(scaleQuantLevel)
 
             x_q_levels_l = torch.abs(
-                torch.clamp(torch.floor(torch.log(x + ref_value) / np.log(base)), 0, 2 ** bits - 1)
+                torch.clamp(
+                    torch.floor(torch.log(x + ref_value) / np.log(base)), 0, 2**bits - 1
+                )
             )
             x_q_levels_u = torch.abs(
-                torch.clamp(torch.ceil(torch.log(x + ref_value) / np.log(base)), 0, 2 ** bits - 1)
+                torch.clamp(
+                    torch.ceil(torch.log(x + ref_value) / np.log(base)), 0, 2**bits - 1
+                )
             )
 
             # convert to uniform domain
-            x_q_l = base ** x_q_levels_l
-            x_q_u = base ** x_q_levels_u
+            x_q_l = base**x_q_levels_l
+            x_q_u = base**x_q_levels_u
 
             # stack low and up bound
             x_q_bound = torch.stack([x_q_l, x_q_u], dim=-1)
@@ -252,7 +271,9 @@ def convert_weight_to_levels(
             ctx.alpha = alpha
 
             if power:
-                input_q, input_q_levels = efficient_power_quant(input_abs, base, bits, assign)
+                input_q, input_q_levels = efficient_power_quant(
+                    input_abs, base, bits, assign
+                )
             else:
                 input_q, input_q_levels = uniform_quant(input_abs, bits)
 
@@ -267,16 +288,18 @@ def convert_weight_to_levels(
             input_q_levels, x_pos_mask, x_neg_mask = assign_array_value(
                 input_q_levels, assign, assign_zero_value, sign
             )
-            input_q_levels = input_q_levels.div(2 ** bits - 1)
+            input_q_levels = input_q_levels.div(2**bits - 1)
 
-            ctx.save_for_backward(input_abs, x_pos_mask, x_neg_mask, grad_update_xor_mask)
+            ctx.save_for_backward(
+                input_abs, x_pos_mask, x_neg_mask, grad_update_xor_mask
+            )
 
             return input_q_levels
 
         @staticmethod
         def backward(ctx, grad_output):
             input_abs, x_pos_mask, x_neg_mask, grad_update_xor_mask = ctx.saved_tensors
-            ref_value = base ** (2 ** bits - 1)
+            ref_value = base ** (2**bits - 1)
             scaleQuantLevel = 1 - ref_value
 
             if loss_fn == "l1":
@@ -285,7 +308,7 @@ def convert_weight_to_levels(
                     grad_input.mul(scaleQuantLevel)
                     .div(input_abs * scaleQuantLevel + ref_value)
                     .div(-np.log(base))
-                    .div(2 ** bits - 1)
+                    .div(2**bits - 1)
                 )
 
             elif loss_fn == "l2":
@@ -304,7 +327,7 @@ def convert_weight_to_levels(
                     .mul(scaleQuantLevel)
                     .div(input_abs * scaleQuantLevel + ref_value)
                     .div(-np.log(base))
-                    .div(2 ** bits - 1)
+                    .div(2**bits - 1)
                 )
 
             # print_stat(grad_input)
@@ -336,11 +359,13 @@ class weight_to_quantized_weight(torch.nn.Module):
         self.loss_fn = loss_fn
 
         ## init converter with bits, base, power, assign
-        self.converter = convert_weight_to_levels(self.bits, self.base, self.power, self.assign, loss_fn)
+        self.converter = convert_weight_to_levels(
+            self.bits, self.base, self.power, self.assign, loss_fn
+        )
 
     def set_assign_zero_value(self, assign_zero_value=None):
         if assign_zero_value is None:
-            assign_zero_value = 2 ** self.bits - 1
+            assign_zero_value = 2**self.bits - 1
         self.assign_zero_value = assign_zero_value
 
     def set_bitwidth(self, bit: int) -> None:
@@ -349,7 +374,7 @@ class weight_to_quantized_weight(torch.nn.Module):
             self.converter = convert_weight_to_levels(
                 self.bits, self.base, self.power, self.assign, self.loss_fn
             )
-            self.set_assign_zero_value(2 ** bit - 1)
+            self.set_assign_zero_value(2**bit - 1)
 
     def forward(self, x, grad_update_xor_mask=None):
         x = torch.tanh(x)
@@ -357,7 +382,9 @@ class weight_to_quantized_weight(torch.nn.Module):
 
         x = x / alpha
 
-        x_q_levels = self.converter(x, alpha, self.assign_zero_value, grad_update_xor_mask)
+        x_q_levels = self.converter(
+            x, alpha, self.assign_zero_value, grad_update_xor_mask
+        )
 
         return x_q_levels
 
@@ -383,15 +410,15 @@ def assign_array_value_cpu(x, bits, assign, assign_zero_value, sign, sep_flag):
         negative_zero_mask = torch.logical_and(sign_mask, x_zero_mask)
         # print(negative_zero_mask)
 
-        x_pos[negative_zero_mask] = 2 ** bits - 1
+        x_pos[negative_zero_mask] = 2**bits - 1
         x_neg[negative_zero_mask] = 0
 
         # # cat
         # x_q_levels_p_n =  torch.stack((x_pos, x_neg), -1)
     else:
         raise NotImplementedError
-    x_pos = 2 ** bits - 1 - x_pos  # 2**bits - 1 ~ 0
-    x_neg = -(2 ** bits) + 1 + x_neg  # - (2**bits - 1) ~ 0
+    x_pos = 2**bits - 1 - x_pos  # 2**bits - 1 ~ 0
+    x_neg = -(2**bits) + 1 + x_neg  # - (2**bits - 1) ~ 0
 
     if sep_flag:
         x_q_levels_p_n = torch.cat((x_pos, x_neg), -1)
@@ -403,8 +430,8 @@ def assign_array_value_cpu(x, bits, assign, assign_zero_value, sign, sep_flag):
 
 def uniform_quant_cpu(x, bits):
     # must be scaled to 0-1 before this function
-    x = x.mul((2 ** bits - 1))
-    x_q = x.round().div(2 ** bits - 1)
+    x = x.mul((2**bits - 1))
+    x_q = x.round().div(2**bits - 1)
     x_q_levels = x.round()
 
     return x_q, x_q_levels
@@ -418,21 +445,25 @@ def efficient_power_quant_cpu(x, base, bits, assign):
         bits: bits
     """
     if assign:
-        ref_value = base ** (2 ** bits - 1)
+        ref_value = base ** (2**bits - 1)
 
         scaleQuantLevel = 1 - ref_value
         x = x.mul(scaleQuantLevel)
 
         x_q_levels_l = torch.abs(
-            torch.clamp(torch.floor(torch.log(x + ref_value) / np.log(base)), 0, 2 ** bits - 1)
+            torch.clamp(
+                torch.floor(torch.log(x + ref_value) / np.log(base)), 0, 2**bits - 1
+            )
         )
         x_q_levels_u = torch.abs(
-            torch.clamp(torch.ceil(torch.log(x + ref_value) / np.log(base)), 0, 2 ** bits - 1)
+            torch.clamp(
+                torch.ceil(torch.log(x + ref_value) / np.log(base)), 0, 2**bits - 1
+            )
         )
 
         # convert to uniform domain
-        x_q_l = base ** x_q_levels_l
-        x_q_u = base ** x_q_levels_u
+        x_q_l = base**x_q_levels_l
+        x_q_u = base**x_q_levels_u
 
         # stack low and up bound
         x_q_bound = torch.stack([x_q_l, x_q_u], dim=-1)
@@ -461,17 +492,19 @@ class weight_to_quantized_weight_cpu(object):
         self.assign = assign
         self.assign_zero_value = assign_zero_value
 
-        self.sep_flag = sep_flag  # whether to sep weight level into pos, neg by torch cat
+        self.sep_flag = (
+            sep_flag  # whether to sep weight level into pos, neg by torch cat
+        )
 
     def set_assign_zero_value(self, assign_zero_value=None):
         if assign_zero_value is None:
-            assign_zero_value = 2 ** self.bits - 1
+            assign_zero_value = 2**self.bits - 1
         self.assign_zero_value = assign_zero_value
 
     def set_bitwidth(self, bit: int) -> None:
         if bit != self.bits:
             self.bits = bit
-            self.set_assign_zero_value(2 ** bit - 1)
+            self.set_assign_zero_value(2**bit - 1)
 
     def forward(self, input):
         ## emulate quantization flow
@@ -483,7 +516,9 @@ class weight_to_quantized_weight_cpu(object):
         input_abs /= alpha  # scale value to 0-1
 
         if self.power:
-            input_q, input_q_levels = efficient_power_quant_cpu(input_abs, self.base, self.bits, self.assign)
+            input_q, input_q_levels = efficient_power_quant_cpu(
+                input_abs, self.base, self.bits, self.assign
+            )
         else:
             input_q, input_q_levels = uniform_quant_cpu(input_abs, self.bits)
 
@@ -492,8 +527,13 @@ class weight_to_quantized_weight_cpu(object):
         sign[sign == 0] = 1
         input_q_levels = input_q_levels.mul_(sign)
         input_q_levels, x_pos_mask, x_neg_mask = assign_array_value_cpu(
-            input_q_levels, self.bits, self.assign, self.assign_zero_value, sign, self.sep_flag
+            input_q_levels,
+            self.bits,
+            self.assign,
+            self.assign_zero_value,
+            sign,
+            self.sep_flag,
         )
-        input_q_levels = input_q_levels.div(2 ** self.bits - 1)
+        input_q_levels = input_q_levels.div(2**self.bits - 1)
 
         return input_q, input_q_levels

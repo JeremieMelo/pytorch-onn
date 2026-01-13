@@ -286,7 +286,6 @@ class SuperBlockConv2d(ONNBaseConv2d):
                 : self.out_channels, : self.in_channels_flat
             ].view(-1, self.in_channels, self.kernel_size[0], self.kernel_size[1])
 
-
             def build_weight_fn():
                 self.super_layer.build_arch_mask(mode="gumbel_hard")
                 return self.transform_weight(self.weights)["weight"]

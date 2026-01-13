@@ -5,11 +5,13 @@ Date: 2022-04-18 21:22:45
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2022-04-18 21:29:47
 """
+
 import torch
 from pyutils.general import logger
 from pyutils.quantize import uniform_quantize
 
 __all__ = ["dc_quantize_fn"]
+
 
 class dc_quantize_fn(torch.nn.Module):
     def __init__(self, w_bit, quant_ratio=1.0):
@@ -20,11 +22,15 @@ class dc_quantize_fn(torch.nn.Module):
             quant_ratio (float, optional): Quantization ratio to support full-precision gradient flow. Defaults to 1.0.
         """
         super().__init__()
-        assert 1 <= w_bit <= 32, logger.error(f"Only support 1 - 32 bit quantization, but got {w_bit}")
+        assert 1 <= w_bit <= 32, logger.error(
+            f"Only support 1 - 32 bit quantization, but got {w_bit}"
+        )
         self.w_bit = w_bit
 
         self.quant_ratio = quant_ratio
-        assert 0 <= quant_ratio <= 1, logger.error(f"Wrong quant ratio. Must in [0,1], but got {quant_ratio}")
+        assert 0 <= quant_ratio <= 1, logger.error(
+            f"Wrong quant ratio. Must in [0,1], but got {quant_ratio}"
+        )
         self.uniform_q = uniform_quantize(k=w_bit, gradient_clip=True)
 
     def set_quant_ratio(self, quant_ratio=None):
@@ -49,7 +55,9 @@ class dc_quantize_fn(torch.nn.Module):
                 0.99,
                 1,
             ][min(self.w_bit, 16)]
-        assert 0 <= quant_ratio <= 1, logger.error(f"Wrong quant ratio. Must in [0,1], but got {quant_ratio}")
+        assert 0 <= quant_ratio <= 1, logger.error(
+            f"Wrong quant ratio. Must in [0,1], but got {quant_ratio}"
+        )
         self.quant_ratio = quant_ratio
 
     def set_bitwidth(self, bit: int) -> None:
@@ -61,7 +69,9 @@ class dc_quantize_fn(torch.nn.Module):
         if self.quant_ratio < 1 and self.training:
             ### implementation from fairseq
             ### must fully quantize during inference
-            quant_noise_mask = torch.empty_like(x, dtype=torch.bool).bernoulli_(1 - self.quant_ratio)
+            quant_noise_mask = torch.empty_like(x, dtype=torch.bool).bernoulli_(
+                1 - self.quant_ratio
+            )
         else:
             quant_noise_mask = None
 
@@ -69,9 +79,11 @@ class dc_quantize_fn(torch.nn.Module):
             weight_q = torch.tanh(x)
             weight_q = weight_q / torch.max(torch.abs(weight_q))
         elif self.w_bit == 1:
-            weight_q = self.uniform_q(x).add(1).mul((1 - 2 ** 0.5 / 2) / 2).add(2 ** 0.5 / 2)  # [0.717, 1] corresponds to 50:50 DC and identity waveguide connection, respectively
+            weight_q = (
+                self.uniform_q(x).add(1).mul((1 - 2**0.5 / 2) / 2).add(2**0.5 / 2)
+            )  # [0.717, 1] corresponds to 50:50 DC and identity waveguide connection, respectively
             if quant_noise_mask is not None:
-                x = x.add((2 + 2 ** 0.5) / 4)  # mean is (0.717+1)/2
+                x = x.add((2 + 2**0.5) / 4)  # mean is (0.717+1)/2
                 noise = weight_q.data.sub_(x.data).masked_fill_(quant_noise_mask, 0)
                 ### unquantized weights have to follow reparameterization, i.e., tanh and scale
                 weight_q = x + noise
@@ -83,7 +95,9 @@ class dc_quantize_fn(torch.nn.Module):
             # weight = weight / 2 + 0.5
             weight_q = self.uniform_q(weight)  # [0 ~ 1]
             if quant_noise_mask is not None:
-                noise = weight_q.data.sub_(weight.data).masked_fill_(quant_noise_mask, 0)
+                noise = weight_q.data.sub_(weight.data).masked_fill_(
+                    quant_noise_mask, 0
+                )
                 weight_q = weight + noise
 
         return weight_q

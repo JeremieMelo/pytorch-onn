@@ -17,7 +17,7 @@
 <p align="center">
     <a href="https://github.com/JeremieMelo/pytorch-onn/blob/release/LICENSEE">
         <img alt="MIT License" src="https://img.shields.io/apm/l/atomic-design-ui.svg?">
-    </a>    
+    </a>
 </p>
 <br />
 
@@ -142,7 +142,7 @@ class ONNModel(ONNBaseModel):
 ```
 Or you can simply convert a standard PyTorch model to its optical analog version
 ```python
-import torch 
+import torch
 from torchonn.models.base_model import ONNBaseModel
 
 class CNN(torch.nn.Module):

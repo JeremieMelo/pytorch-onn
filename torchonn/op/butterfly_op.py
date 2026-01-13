@@ -5,17 +5,17 @@ Date: 2021-11-27 19:23:38
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-11-27 19:25:28
 """
+
 import math
 from typing import Optional
 
 import numpy as np
 import torch
+import torch.fft
 from pyutils.compute import complex_mult
 from pyutils.general import logger
-
 from torch import Tensor, nn
 from torch.types import Device
-import torch.fft
 
 try:
     import universal_cuda
@@ -63,7 +63,8 @@ class FWHT1D_CPU(torch.autograd.Function):
 
 class FWHT1D_CUDA(torch.autograd.Function):
     """Unitary 1D hadamard transform implemented with customized CUDA kernel. Normalization factor is 1/sqrt(N). N is a power of 2
-    https://github.com/HazyResearch/structured-nets/blob/master/pytorch/structure/hadamard_cuda"""
+    https://github.com/HazyResearch/structured-nets/blob/master/pytorch/structure/hadamard_cuda
+    """
 
     @staticmethod
     def forward(ctx, input):
@@ -71,7 +72,9 @@ class FWHT1D_CUDA(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return hadamard_cuda.hadamard_transform(grad_output) / np.sqrt(grad_output.size(-1))
+        return hadamard_cuda.hadamard_transform(grad_output) / np.sqrt(
+            grad_output.size(-1)
+        )
 
 
 class UFT1D_CUDA(torch.autograd.Function):
@@ -181,7 +184,7 @@ class TrainableButterfly(nn.Module):
         )
         t = self.coupler_transmission_factor_t
         insertion_loss = self.coupler_insertion_loss
-        k = np.sqrt(1 - insertion_loss - t ** 2)
+        k = np.sqrt(1 - insertion_loss - t**2)
         assert k >= 0, logger.error(
             f"Impossible transmission factor of coupler, requires t^2 + k^2 = 1 - insertion_loss, but got t={t}, insertion loss={insertion_loss}"
         )
@@ -223,7 +226,9 @@ class TrainableButterfly(nn.Module):
 
     def train_fft(self):
         inverse = self.reverse
-        logger.info(f"Start initializing TrainableButterfly to {'OFFT' if inverse == False else 'OIFFT'}")
+        logger.info(
+            f"Start initializing TrainableButterfly to {'OFFT' if inverse == False else 'OIFFT'}"
+        )
 
         grad_state = self.phases.requires_grad
         perm_state = self.bit_reversal
@@ -247,7 +252,9 @@ class TrainableButterfly(nn.Module):
                 ).view(-1, self.length // 2, 2)
             )
         else:
-            optimizer = torch.optim.Adam((p for p in self.parameters() if p.requires_grad), lr=2e-3)
+            optimizer = torch.optim.Adam(
+                (p for p in self.parameters() if p.requires_grad), lr=2e-3
+            )
             x = self.eye.flatten(1)
             from tqdm import tqdm
 
@@ -287,7 +294,9 @@ class TrainableButterfly(nn.Module):
             raise NotImplementedError
 
     def build_dc_matrix(self, t: float, k: float) -> Tensor:
-        return torch.tensor([[t, k * 1j], [k * 1j, t]], device=self.device, dtype=torch.cfloat)
+        return torch.tensor(
+            [[t, k * 1j], [k * 1j, t]], device=self.device, dtype=torch.cfloat
+        )
 
     def build_weight(self, phases: Optional[Tensor] = None) -> Tensor:
         phases = phases is not None or self.phases
@@ -317,7 +326,9 @@ class TrainableButterfly(nn.Module):
         if self.bit_reversal:
             shape = weights.size()
             weights = weights.flatten(1)  # [length, length]
-            weights = self.permutations(weights, level=self.n_level - 1)  # [length, length]
+            weights = self.permutations(
+                weights, level=self.n_level - 1
+            )  # [length, length]
         else:
             weights = weights.flatten(1)  # [length, length]
 
@@ -336,7 +347,11 @@ class TrainableButterfly(nn.Module):
 
 class ButterflyPermutation(nn.Module):
     def __init__(
-        self, length, crossing_transmission_factor=1, crossing_phase_shift=0, device=torch.device("cuda:0")
+        self,
+        length,
+        crossing_transmission_factor=1,
+        crossing_phase_shift=0,
+        device=torch.device("cuda:0"),
     ):
         super(ButterflyPermutation, self).__init__()
         self.length = length
@@ -362,7 +377,9 @@ class ButterflyPermutation(nn.Module):
         # barkward indices [1,2,3,4,5,6,7,8] -> [1,3,5,7,2,4,6,8]
 
         forward_indices, backward_indices = [], []
-        initial_indices = torch.arange(0, self.length, dtype=torch.long, device=self.device)
+        initial_indices = torch.arange(
+            0, self.length, dtype=torch.long, device=self.device
+        )
 
         for level in range(self.n_level):
             block_size = 2 ** (level + 2)
@@ -375,7 +392,11 @@ class ButterflyPermutation(nn.Module):
             forward_indices.append(indices)
 
             indices = initial_indices.view(-1, self.length // block_size, block_size)
-            indices = torch.cat([indices[..., ::2], indices[..., 1::2]], dim=-1).contiguous().view(-1)
+            indices = (
+                torch.cat([indices[..., ::2], indices[..., 1::2]], dim=-1)
+                .contiguous()
+                .view(-1)
+            )
             backward_indices.append(indices)
         return forward_indices, backward_indices
 
@@ -386,7 +407,8 @@ class ButterflyPermutation(nn.Module):
         ### to  : 0 1 2 3 4 5 6 7
         ### get : 0 3 1 2 2 1 3 0
         return [
-            (indices - torch.arange(self.length, device=indices.device)).abs() for indices in forward_indices
+            (indices - torch.arange(self.length, device=indices.device)).abs()
+            for indices in forward_indices
         ]
 
     def gen_crossings(self, num_crossings):
@@ -399,7 +421,7 @@ class ButterflyPermutation(nn.Module):
         crossings = []
         for n_cross in num_crossings:
             n_cross = n_cross.float()
-            mag = self.crossing_transmission_factor ** n_cross
+            mag = self.crossing_transmission_factor**n_cross
             phase = n_cross * self.crossing_phase_shift
             # crossings.append(torch.stack([mag * phase.cos(), mag * phase.sin()], dim=-1))
             crossings.append(mag.mul(torch.exp(1j * phase)))
@@ -411,11 +433,15 @@ class ButterflyPermutation(nn.Module):
         else:
             if inverse == False:
                 # output = ButterflyPermutationFunction.apply(x, self.forward_indices[level], self.backward_indices[level])
-                output = ButterflyPermutationFunction.apply(x, self.forward_indices[level])
+                output = ButterflyPermutationFunction.apply(
+                    x, self.forward_indices[level]
+                )
                 ## in the original transform, crossings are added after permutation
                 # output = complex_mult(self.crossings[level][(None,) * (output.dim() - 2)], output)
                 if not self.fast_forward:
-                    output = self.crossings[level][(None,) * (output.dim() - 2)].mul(output)
+                    output = self.crossings[level][(None,) * (output.dim() - 2)].mul(
+                        output
+                    )
 
             else:
                 # output = ButterflyPermutationFunction.apply(x, self.backward_indices[self.n_level-level-1], self.forward_indices[self.n_level-level-1])

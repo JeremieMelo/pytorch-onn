@@ -5,6 +5,7 @@ Date: 2021-06-06 19:12:42
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-06 19:12:42
 """
+
 from functools import lru_cache
 from multiprocessing.dummy import Pool
 from typing import Optional
@@ -19,6 +20,7 @@ from pyutils.quantize import uniform_quantize, uniform_quantize_cpu
 from pyutils.torch_train import apply_weight_decay, set_torch_deterministic
 from torch import Tensor
 from torch.types import Device, _size
+
 from torchonn.op.matrix_parametrization import RealUnitaryDecomposerBatch
 
 __all__ = [
@@ -79,12 +81,17 @@ class voltage_quantize_fn_cpu(object):
         self.v_bit = v_bit
         self.v_pi = v_pi
         self.v_max = v_max
-        self.gamma = np.pi / (self.v_pi ** 2)
+        self.gamma = np.pi / (self.v_pi**2)
         self.uniform_q = uniform_quantize_cpu(bits=v_bit)
         self.pi = np.pi
 
     def __call__(
-        self, x, voltage_mask_old=None, voltage_mask_new=None, voltage_backup=None, strict_mask=True
+        self,
+        x,
+        voltage_mask_old=None,
+        voltage_mask_new=None,
+        voltage_backup=None,
+        strict_mask=True,
     ):
         if self.v_bit == 32:
             voltage_q = x
@@ -101,7 +108,11 @@ class voltage_quantize_fn_cpu(object):
             # phase_q = 2 * self.uniform_q(phase) - 1
             voltage_q = self.uniform_q(voltage) * max_V
 
-            if voltage_mask_old is not None and voltage_mask_new is not None and voltage_backup is not None:
+            if (
+                voltage_mask_old is not None
+                and voltage_mask_new is not None
+                and voltage_backup is not None
+            ):
                 if strict_mask == True:
                     # strict mask will always fix masked voltages, even though they are not covered in the new mask
                     # "1" in mask indicates to apply quantization
@@ -111,12 +122,16 @@ class voltage_quantize_fn_cpu(object):
                     voltage_q_tmp[voltage_mask_old] = voltage_backup[voltage_mask_old]
                     # quantize new voltages those are marked in the new mask
                     # print("any newly marked voltages:", voltage_mask_newly_marked.any())
-                    voltage_q_tmp[voltage_mask_newly_marked] = voltage_q[voltage_mask_newly_marked]
+                    voltage_q_tmp[voltage_mask_newly_marked] = voltage_q[
+                        voltage_mask_newly_marked
+                    ]
                     # only update newly quantized voltages, previously quantized voltages are maintained
                     # if (voltage_backup[voltage_mask_newly_marked].sum() > 1e-4):
                     #     print(voltage_backup[voltage_mask_newly_marked])
 
-                    voltage_backup[voltage_mask_newly_marked] = voltage_q[voltage_mask_newly_marked]
+                    voltage_backup[voltage_mask_newly_marked] = voltage_q[
+                        voltage_mask_newly_marked
+                    ]
 
                     voltage_q = voltage_q_tmp
                 else:
@@ -127,9 +142,13 @@ class voltage_quantize_fn_cpu(object):
                     # maintain voltages that have already been masked and being masked in the new mask
                     voltage_q_tmp[voltage_mask_old] = voltage_backup[voltage_mask_old]
                     # quantize new voltages those are marked in the new mask
-                    voltage_q_tmp[voltage_mask_newly_marked] = voltage_q[voltage_mask_newly_marked]
+                    voltage_q_tmp[voltage_mask_newly_marked] = voltage_q[
+                        voltage_mask_newly_marked
+                    ]
 
-                    voltage_backup[voltage_mask_newly_marked] = voltage_q[voltage_mask_newly_marked]
+                    voltage_backup[voltage_mask_newly_marked] = voltage_q[
+                        voltage_mask_newly_marked
+                    ]
                     voltage_q = voltage_q_tmp
 
         return voltage_q
@@ -155,7 +174,7 @@ class phase_quantize_fn(torch.nn.Module):
         self.v_bit = v_bit
         self.v_pi = v_pi
         self.v_max = v_max
-        self.gamma = np.pi / (self.v_pi ** 2)
+        self.gamma = np.pi / (self.v_pi**2)
         self.gamma_noise_std = gamma_noise_std
         self.crosstalk_factor = crosstalk_factor
         self.voltage_quantizer = voltage_quantize_fn(v_bit, v_pi, v_max)
@@ -164,7 +183,10 @@ class phase_quantize_fn(torch.nn.Module):
         self.device = device
 
         self.crosstal_simulator = ThermalCrosstalkSimulator(
-            plotting=False, filter_size=3, crosstalk_factor=crosstalk_factor, device=self.device
+            plotting=False,
+            filter_size=3,
+            crosstalk_factor=crosstalk_factor,
+            device=self.device,
         )
 
     def set_gamma_noise(self, noise_std, random_state=None):
@@ -181,7 +203,10 @@ class phase_quantize_fn(torch.nn.Module):
                 x,
                 noise_mean=self.gamma,
                 noise_std=self.gamma_noise_std,
-                trunc_range=(self.gamma - 3 * self.gamma_noise_std, self.gamma + 3 * self.gamma_noise_std),
+                trunc_range=(
+                    self.gamma - 3 * self.gamma_noise_std,
+                    self.gamma + 3 * self.gamma_noise_std,
+                ),
                 random_state=self.random_state,
             )
         else:
@@ -205,7 +230,9 @@ class phase_quantize_fn(torch.nn.Module):
             )
         ## add crosstalk with mixed training mask
         if self.crosstalk_factor > 1e-5:
-            phase = self.crosstal_simulator.simple_simulate(phase, mixedtraining_mask, mode)
+            phase = self.crosstal_simulator.simple_simulate(
+                phase, mixedtraining_mask, mode
+            )
         return phase
 
 
@@ -216,7 +243,7 @@ class voltage_quantize_fn(torch.nn.Module):
         self.v_bit = v_bit
         self.v_pi = v_pi
         self.v_max = v_max
-        self.gamma = np.pi / (self.v_pi ** 2)
+        self.gamma = np.pi / (self.v_pi**2)
         self.uniform_q = uniform_quantize(k=v_bit)
         self.pi = np.pi
 
@@ -233,9 +260,11 @@ class voltage_quantize_fn(torch.nn.Module):
         return voltage_q
 
 
-def clip_to_valid_quantized_voltage_cpu(voltages, gamma, v_bit, v_max, wrap_around=False):
+def clip_to_valid_quantized_voltage_cpu(
+    voltages, gamma, v_bit, v_max, wrap_around=False
+):
     v_2pi = np.sqrt(2 * np.pi / gamma)
-    v_interval = v_max / (2 ** v_bit - 1)
+    v_interval = v_max / (2**v_bit - 1)
     if wrap_around:
         mask = voltages >= v_2pi
         voltages[mask] = 0
@@ -246,7 +275,7 @@ def clip_to_valid_quantized_voltage_cpu(voltages, gamma, v_bit, v_max, wrap_arou
 
 def clip_to_valid_quantized_voltage(voltages, gamma, v_bit, v_max, wrap_around=False):
     v_2pi = np.sqrt(2 * np.pi / gamma)
-    v_interval = v_max / (2 ** v_bit - 1)
+    v_interval = v_max / (2**v_bit - 1)
     if isinstance(voltages, np.ndarray):
         if wrap_around:
             mask = voltages >= v_2pi
@@ -276,7 +305,7 @@ def clip_to_valid_quantized_voltage(voltages, gamma, v_bit, v_max, wrap_around=F
 
 def clip_to_valid_quantized_voltage_(voltages, gamma, v_bit, v_max, wrap_around=False):
     v_2pi = np.sqrt(2 * np.pi / gamma)
-    v_interval = v_max / (2 ** v_bit - 1)
+    v_interval = v_max / (2**v_bit - 1)
     if isinstance(voltages, np.ndarray):
         if wrap_around:
             mask = voltages >= v_2pi
@@ -326,7 +355,9 @@ def phase_to_voltage_cpu(phases, gamma):
         phases_tmp = phases.copy()
         phases_tmp[phases_tmp > 0] -= 2 * pi  # change phase lead to phase lag
         voltage_max = np.sqrt((2 * pi) / gamma)
-        voltages = np.clip(np.sqrt(np.abs(phases_tmp / gamma)), a_min=0, a_max=voltage_max)
+        voltages = np.clip(
+            np.sqrt(np.abs(phases_tmp / gamma)), a_min=0, a_max=voltage_max
+        )
     else:
         voltages = (phases % (2 * np.pi)).div(gamma).sqrt()
     return voltages
@@ -380,7 +411,9 @@ def vector_to_upper_triangle(vec, complex=False):
         N = (1 + int(np.sqrt(1 + 8 * M))) // 2
         masks = upper_triangle_masks_cpu(N)
         if complex:
-            mat = np.zeros(shape=list(vec.shape[:-2]) + [N, N, vec.shape[-1]], dtype=vec.dtype)
+            mat = np.zeros(
+                shape=list(vec.shape[:-2]) + [N, N, vec.shape[-1]], dtype=vec.dtype
+            )
             mat[..., masks[0], masks[1], :] = vec
         else:
             mat = np.zeros(shape=list(vec.shape[:-1]) + [N, N], dtype=vec.dtype)
@@ -391,11 +424,15 @@ def vector_to_upper_triangle(vec, complex=False):
         masks = upper_triangle_masks(N, device=vec.device)
         if complex:
             mat = torch.zeros(
-                size=list(vec.size())[:-2] + [N, N, vec.size(-1)], dtype=vec.dtype, device=vec.device
+                size=list(vec.size())[:-2] + [N, N, vec.size(-1)],
+                dtype=vec.dtype,
+                device=vec.device,
             )
             mat[..., masks[0], masks[1], :] = vec
         else:
-            mat = torch.zeros(size=list(vec.size())[:-1] + [N, N], dtype=vec.dtype, device=vec.device)
+            mat = torch.zeros(
+                size=list(vec.size())[:-1] + [N, N], dtype=vec.dtype, device=vec.device
+            )
             mat[..., masks[0], masks[1]] = vec
     else:
         raise NotImplementedError
@@ -416,8 +453,12 @@ def checkerboard_to_vector(mat, complex=False):
         N = mat.shape[-1]
         upper_oddN = N - (N % 2 == 1)
         upper_evenN = N - (N % 2 == 0)
-        vector_even_col = np.swapaxes(mat[..., :upper_oddN:2, ::2], -1, -2).reshape([*mat.shape[:-2], -1])
-        vector_odd_col = np.swapaxes(mat[..., 1:upper_evenN:2, 1::2], -1, -2).reshape([*mat.shape[:-2], -1])
+        vector_even_col = np.swapaxes(mat[..., :upper_oddN:2, ::2], -1, -2).reshape(
+            [*mat.shape[:-2], -1]
+        )
+        vector_odd_col = np.swapaxes(mat[..., 1:upper_evenN:2, 1::2], -1, -2).reshape(
+            [*mat.shape[:-2], -1]
+        )
         vector = np.concatenate([vector_even_col, vector_odd_col], -1)
         if complex:
             vector = np.transpose(vector, axes=np.roll(np.arange(vector.ndim), -1))
@@ -430,9 +471,9 @@ def checkerboard_to_vector(mat, complex=False):
         vector_even_col = torch.transpose(mat[..., :upper_oddN:2, ::2], -1, -2).reshape(
             list(mat.size())[:-2] + [-1]
         )
-        vector_odd_col = torch.transpose(mat[..., 1:upper_evenN:2, 1::2], -1, -2).reshape(
-            list(mat.size())[:-2] + [-1]
-        )
+        vector_odd_col = torch.transpose(
+            mat[..., 1:upper_evenN:2, 1::2], -1, -2
+        ).reshape(list(mat.size())[:-2] + [-1])
         vector = torch.cat([vector_even_col, vector_odd_col], -1)
         if complex:
             vector = torch.permute(vector, list(np.roll(np.arange(vector.ndim), -1)))
@@ -454,8 +495,12 @@ def vector_to_checkerboard(vec, complex=False):
         vector_even_col = vec[..., : (N // 2) * ((N + 1) // 2)]
         vector_odd_col = vec[..., (N // 2) * ((N + 1) // 2) :]
         mat = np.zeros([*vec.shape[:-1], N, N], dtype=vec.dtype)
-        mat[..., ::2, :upper_oddN:2] = vector_even_col.reshape([*vec.shape[:-1], (N + 1) // 2, -1])
-        mat[..., 1::2, 1:upper_evenN:2] = vector_odd_col.reshape([*vec.shape[:-1], N // 2, -1])
+        mat[..., ::2, :upper_oddN:2] = vector_even_col.reshape(
+            [*vec.shape[:-1], (N + 1) // 2, -1]
+        )
+        mat[..., 1::2, 1:upper_evenN:2] = vector_odd_col.reshape(
+            [*vec.shape[:-1], N // 2, -1]
+        )
         mat = np.swapaxes(mat, -1, -2)
         if complex:
             mat = np.transpose(mat, axes=np.roll(np.arange(mat.ndim), -1))
@@ -469,8 +514,12 @@ def vector_to_checkerboard(vec, complex=False):
         vector_even_col = vec[..., : (N // 2) * ((N + 1) // 2)]
         vector_odd_col = vec[..., (N // 2) * ((N + 1) // 2) :]
         mat = torch.zeros([*vec.shape[:-1], N, N], device=vec.device, dtype=vec.dtype)
-        mat[..., ::2, :upper_oddN:2] = vector_even_col.reshape([*vec.shape[:-1], (N + 1) // 2, -1])
-        mat[..., 1::2, 1:upper_evenN:2] = vector_odd_col.reshape([*vec.shape[:-1], N // 2, -1])
+        mat[..., ::2, :upper_oddN:2] = vector_even_col.reshape(
+            [*vec.shape[:-1], (N + 1) // 2, -1]
+        )
+        mat[..., 1::2, 1:upper_evenN:2] = vector_odd_col.reshape(
+            [*vec.shape[:-1], N // 2, -1]
+        )
 
         mat = torch.transpose(mat, -1, -2)
         if complex:
@@ -637,13 +686,15 @@ class PhaseQuantizer(torch.nn.Module):
         self.bit = bit
         self.v_pi = v_pi
         self.v_max = v_max
-        self.gamma = np.pi / v_pi ** 2
+        self.gamma = np.pi / v_pi**2
         self.gamma_noise_std = gamma_noise_std
         self.crosstalk_factor = crosstalk_factor
         self.crosstalk_filter_size = crosstalk_filter_size
         self.random_state = random_state
         self.mode = mode
-        assert mode in self.__mode_list__, logger.error(f"Only support mode in {self.__mode_list__}, but got mode: {mode}.")
+        assert mode in self.__mode_list__, logger.error(
+            f"Only support mode in {self.__mode_list__}, but got mode: {mode}."
+        )
         self.device = device
 
         self.crosstal_simulator = ThermalCrosstalkSimulator(
@@ -654,7 +705,9 @@ class PhaseQuantizer(torch.nn.Module):
         )
         self.register_buffer("noisy_gamma", None)  # can be saved in checkpoint
 
-    def set_gamma_noise(self, noise_std: float, size: _size, random_state: Optional[int] = None):
+    def set_gamma_noise(
+        self, noise_std: float, size: _size, random_state: Optional[int] = None
+    ):
         self.gamma_noise_std = noise_std
         self.random_state = random_state
         if random_state is not None:
@@ -676,11 +729,11 @@ class PhaseQuantizer(torch.nn.Module):
         x = x % (2 * np.pi)
         if self.bit < 16:
             if self.mode in {"rectangle", "triangle", "butterfly"}:  # [0, 2pi] quantize
-                ratio = 2 * np.pi / (2 ** self.bit - 1)
+                ratio = 2 * np.pi / (2**self.bit - 1)
                 x.div_(ratio).round_().mul_(ratio)
             elif self.mode in {"diagonal"}:  # [0, pi] quantize
                 x = torch.where(x > np.pi, 2 * np.pi - x, x)
-                ratio = np.pi / (2 ** self.bit - 1)
+                ratio = np.pi / (2**self.bit - 1)
                 x.div_(ratio).round_().mul_(ratio)
             else:
                 raise NotImplementedError(self.mode)
@@ -689,19 +742,23 @@ class PhaseQuantizer(torch.nn.Module):
             x.mul_(self.noisy_gamma.div(self.gamma))
 
         if self.crosstalk_factor > 1e-5:
-            x = self.crosstal_simulator.simple_simulate(x, mixedtraining_mask=None, mode=self.mode)
+            x = self.crosstal_simulator.simple_simulate(
+                x, mixedtraining_mask=None, mode=self.mode
+            )
 
         return x
 
 
-def diagonal_quantize_function(x, bit, phase_noise_std=0, random_state=None, gradient_clip=False):
+def diagonal_quantize_function(
+    x, bit, phase_noise_std=0, random_state=None, gradient_clip=False
+):
     class DiagonalQuantizeFunction(torch.autograd.Function):
         @staticmethod
         def forward(ctx, x):
             ### support batched diagonals. input is not a matrix, but a vector which is the diagonal entries.
             S_scale = x.abs().max(dim=-1, keepdim=True)[0]
             x = (x / S_scale).acos()  # phase after acos is from [0, pi]
-            ratio = np.pi / (2 ** bit - 1)
+            ratio = np.pi / (2**bit - 1)
             x.div_(ratio).round_().mul_(ratio)
             if phase_noise_std > 1e-5:
                 noise = gen_gaussian_noise(
@@ -727,7 +784,9 @@ def diagonal_quantize_function(x, bit, phase_noise_std=0, random_state=None, gra
 
 
 class DiagonalQuantizer(torch.nn.Module):
-    def __init__(self, bit, phase_noise_std=0.0, random_state=None, device=torch.device("cuda")):
+    def __init__(
+        self, bit, phase_noise_std=0.0, random_state=None, device=torch.device("cuda")
+    ):
         """2021/02/18: New phase quantizer for Sigma matrix in MZI-ONN. Gaussian phase noise is supported. All singular values are normalized by a TIA gain (S_scale), the normalized singular values will be achieved by cos(phi), phi will have [0, pi] uniform quantization.
         We do not consider real MZI implementation, thus voltage quantization and gamma noises are not supported.
         Args:
@@ -854,20 +913,29 @@ class ThermalCrosstalkSimulator(object):
     def init_filter(self, filter_size: int, crosstalk_factor: float) -> None:
         c = crosstalk_factor
         if filter_size == 3:
-            self.filter = torch.tensor([[0, c, 0], [c, 1, c], [0, c, 0]], device=self.device)
+            self.filter = torch.tensor(
+                [[0, c, 0], [c, 1, c], [0, c, 0]], device=self.device
+            )
         elif filter_size == 5:
             self.filter = torch.tensor(
-                [[0, c, 0], [c, 0, c], [0, 1, 0], [c, 0, c], [0, c, 0]], device=self.device
+                [[0, c, 0], [c, 0, c], [0, 1, 0], [c, 0, c], [0, c, 0]],
+                device=self.device,
             )
         else:
-            raise ValueError(f"Does not support filter sizes other than 3 or 5, but got {filter_size}")
+            raise ValueError(
+                f"Does not support filter sizes other than 3 or 5, but got {filter_size}"
+            )
         self.filter.unsqueeze_(0).unsqueeze_(0)
 
         self.filter_zero_center = self.filter.clone()
-        self.filter_zero_center[0, 0, self.filter.size(-2) // 2, self.filter.size(-1) // 2] = 0
+        self.filter_zero_center[
+            0, 0, self.filter.size(-2) // 2, self.filter.size(-1) // 2
+        ] = 0
 
     def init_phase_distribution(self, phases: Tensor, dim: int) -> None:
-        self.power_density = np.zeros([self.heat_source_interval * dim, self.heat_source_interval * dim])
+        self.power_density = np.zeros(
+            [self.heat_source_interval * dim, self.heat_source_interval * dim]
+        )
         cnt = 0
         # for i in range(1, dim):
         #     for j in range(1, dim - i + 1):
@@ -877,9 +945,9 @@ class ThermalCrosstalkSimulator(object):
         for i in range(1, dim):
             number_of_sources = dim - i
             interval = self.heat_source_interval
-            self.power_density[interval * i, interval : number_of_sources * interval + 1 : interval] = phases[
-                pointer : pointer + number_of_sources
-            ]
+            self.power_density[
+                interval * i, interval : number_of_sources * interval + 1 : interval
+            ] = phases[pointer : pointer + number_of_sources]
             pointer += number_of_sources
 
     def simulate(self, phases: Tensor, dim: int) -> None:
@@ -906,7 +974,10 @@ class ThermalCrosstalkSimulator(object):
             .to(self.device)
         )
         kernel = torch.from_numpy(
-            np.array([[0, dy * dy, 0], [dx * dx, 0, dx * dx], [0, dy * dy, 0]], dtype=np.float32)
+            np.array(
+                [[0, dy * dy, 0], [dx * dx, 0, dx * dx], [0, dy * dy, 0]],
+                dtype=np.float32,
+            )
         ) / (2 * (dx * dx + dy * dy))
         kernel = kernel.unsqueeze(0).unsqueeze(0).to(self.device)
         mask = torch.zeros(nx, ny, dtype=torch.float32, device=self.device)
@@ -932,7 +1003,12 @@ class ThermalCrosstalkSimulator(object):
 
             if self.plotting is True and it % (self.display_iter) == 0:
                 surf = ax.plot_surface(
-                    X, Y, p.squeeze(0).squeeze(0).numpy(), cmap=cm.rainbow, linewidth=0, antialiased=False
+                    X,
+                    Y,
+                    p.squeeze(0).squeeze(0).numpy(),
+                    cmap=cm.rainbow,
+                    linewidth=0,
+                    antialiased=False,
                 )
                 # ax.set_zlim(0,80)
                 # ax.set_xlim(0,0.1)
@@ -955,7 +1031,9 @@ class ThermalCrosstalkSimulator(object):
         self.crosstalk_factor = crosstalk_factor
         self.init_filter(self.filter_size, crosstalk_factor)
 
-    def simple_simulate_triangle(self, phases: Tensor, mixedtraining_mask: Optional[Tensor]) -> Tensor:
+    def simple_simulate_triangle(
+        self, phases: Tensor, mixedtraining_mask: Optional[Tensor]
+    ) -> Tensor:
         size = phases.size()
         phases = phases % (2 * np.pi)
         if mixedtraining_mask is None:
@@ -964,7 +1042,9 @@ class ThermalCrosstalkSimulator(object):
             phases = vector_to_checkerboard(phases)
             filter = self.filter
             padding1, padding2 = self.filter.size(-2) // 2, self.filter.size(-1) // 2
-            phases = torch.nn.functional.conv2d(phases, filter, padding=(padding1, padding2))
+            phases = torch.nn.functional.conv2d(
+                phases, filter, padding=(padding1, padding2)
+            )
             phases = checkerboard_to_vector(phases)
             phases = phases.view(size)
         else:
@@ -987,20 +1067,28 @@ class ThermalCrosstalkSimulator(object):
 
         return phases
 
-    def simple_simulate_diagonal(self, phases: Tensor, mixedtraining_mask: Optional[Tensor]) -> Tensor:
+    def simple_simulate_diagonal(
+        self, phases: Tensor, mixedtraining_mask: Optional[Tensor]
+    ) -> Tensor:
         return phases
 
-    def simple_simulate_butterfly(self, phases: Tensor, mixedtraining_mask: Optional[Tensor]) -> Tensor:
+    def simple_simulate_butterfly(
+        self, phases: Tensor, mixedtraining_mask: Optional[Tensor]
+    ) -> Tensor:
         phases = phases % (2 * np.pi)
         ## [n_level, k/2, 2]
         size = phases.size()
 
         if mixedtraining_mask is None:
             # [1, 1, n_level, k]
-            phases = phases.view([1, 1] + list(size)[:-2] + [phases.size(-1) * phases.size(-2)])
+            phases = phases.view(
+                [1, 1] + list(size)[:-2] + [phases.size(-1) * phases.size(-2)]
+            )
             filter = self.filter
             padding = self.filter_size // 2
-            phases = torch.nn.functional.conv2d(phases, filter, padding=(padding, padding))
+            phases = torch.nn.functional.conv2d(
+                phases, filter, padding=(padding, padding)
+            )
             phases = phases.view(size)
 
         else:
@@ -1012,7 +1100,9 @@ class ThermalCrosstalkSimulator(object):
             padding = self.filter_size // 2
             # influence map
             phases_active = torch.nn.functional.conv2d(
-                phases_active.view([1, 1] + list(size)[:-2] + [phases.size(-1) * phases.size(-2)]),
+                phases_active.view(
+                    [1, 1] + list(size)[:-2] + [phases.size(-1) * phases.size(-2)]
+                ),
                 filter,
                 padding=(padding, padding),
             )
@@ -1021,7 +1111,9 @@ class ThermalCrosstalkSimulator(object):
 
         return phases
 
-    def simple_simulate_rectangle(self, phases: Tensor, mixedtraining_mask: Optional[Tensor]) -> Tensor:
+    def simple_simulate_rectangle(
+        self, phases: Tensor, mixedtraining_mask: Optional[Tensor]
+    ) -> Tensor:
         size = phases.size()
         phases = phases % (2 * np.pi)
         if mixedtraining_mask is None:
@@ -1030,7 +1122,9 @@ class ThermalCrosstalkSimulator(object):
             phases = vector_to_checkerboard(phases)
             filter = self.filter
             padding1, padding2 = self.filter.size(-2) // 2, self.filter.size(-1) // 2
-            phases = torch.nn.functional.conv2d(phases, filter, padding=(padding1, padding2))
+            phases = torch.nn.functional.conv2d(
+                phases, filter, padding=(padding1, padding2)
+            )
             phases = checkerboard_to_vector(phases)
             phases = phases.view(size)
         else:
@@ -1054,9 +1148,14 @@ class ThermalCrosstalkSimulator(object):
         return phases
 
     def simple_simulate(
-        self, phases: Tensor, mixedtraining_mask: Optional[Tensor] = None, mode: str = "rectangle"
+        self,
+        phases: Tensor,
+        mixedtraining_mask: Optional[Tensor] = None,
+        mode: str = "rectangle",
     ) -> Tensor:
-        assert mode in self.__mode_list__, logger.error(f"Only support mode in {self.__mode_list__}. But got mode: {mode}")
+        assert mode in self.__mode_list__, logger.error(
+            f"Only support mode in {self.__mode_list__}. But got mode: {mode}"
+        )
         if mode == "triangle":
             return self.simple_simulate_triangle(phases, mixedtraining_mask)
         elif mode == "rectangle":

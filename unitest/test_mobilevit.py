@@ -1,12 +1,12 @@
+import sys
 import unittest
 
 import numpy as np
 import torch
-from torch import nn
 from pyutils.general import TimerCtx, logger
+from torch import nn
 from torchvision.models import resnet18
 
-import sys
 # import torchonn as onn
 # from torchonn.models.base_model import ONNBaseModel
 sys.path.append("..")
@@ -19,23 +19,29 @@ class TestModels(unittest.TestCase):
         device = torch.device("cuda:0")
 
         model = MobileViT(
-            image_size = (224,224), 
-            mode = 'small',             # support ["xx_small", "x_small", "small"] as shown in paper
-            num_classes=1000, 
-            patch_size=(2, 2)
+            image_size=(224, 224),
+            mode="small",  # support ["xx_small", "x_small", "small"] as shown in paper
+            num_classes=1000,
+            patch_size=(2, 2),
         )
-        
+
         onn_model = ONNBaseModel.from_model(
             model,
             map_cfgs=dict(
-                Conv2d=dict(type="TeMPOBlockConv2d", mode="weight", photodetect="incoherent"),
-                Linear=dict(type="TeMPOBlockLinear", mode="weight", photodetect="incoherent"),
-                MatMulModule=dict(type="TeMPOBlockMatMul", mode="weight", photodetect="incoherent")
+                Conv2d=dict(
+                    type="TeMPOBlockConv2d", mode="weight", photodetect="incoherent"
+                ),
+                Linear=dict(
+                    type="TeMPOBlockLinear", mode="weight", photodetect="incoherent"
+                ),
+                MatMulModule=dict(
+                    type="TeMPOBlockMatMul", mode="weight", photodetect="incoherent"
+                ),
             ),
             verbose=True,
         )
         x = torch.randn(5, 3, 224, 224)
-        y = model(x) # (5, 1000)
+        y = model(x)  # (5, 1000)
         y_onn = onn_model(x)
         print(y)
         print(y_onn)
@@ -48,4 +54,3 @@ class TestModels(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

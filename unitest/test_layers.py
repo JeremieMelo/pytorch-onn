@@ -6,28 +6,23 @@ LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-10 03:39:01
 """
 
-from tabnanny import verbose
 import unittest
+from tabnanny import verbose
 
 import numpy as np
 import torch
 
-from torchonn.layers import (
-    # AllPassMORRCirculantLinear,
-    # AllPassMORRCirculantConv2d,
-    # AddDropMRRConv2d,
+from torchonn.layers import (  # AllPassMORRCirculantLinear,; AllPassMORRCirculantConv2d,; AddDropMRRConv2d,; MZIConv2d,; MZILinear,
     AddDropMRRBlockConv2d,
     AddDropMRRBlockLinear,
     FFTONNBlockConv2d,
     FFTONNBlockLinear,
-    # MZIConv2d,
-    # MZILinear,
     MZIBlockConv2d,
     MZIBlockLinear,
-    TeMPOBlockLinear,
-    TeMPOBlockConv2d,
     SuperBlockConv2d,
     SuperBlockLinear,
+    TeMPOBlockConv2d,
+    TeMPOBlockLinear,
     super_layer_name_dict,
 )
 
@@ -141,7 +136,9 @@ class TestLayers(unittest.TestCase):
         # print(y1)
         # print(y2)
 
-        assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), f"converted result max abs error: {(y1 - y2).abs().max().item()}"
+        assert np.allclose(
+            y1, y2, rtol=1e-4, atol=1e-4
+        ), f"converted result max abs error: {(y1 - y2).abs().max().item()}"
 
     def test_mziblockconv2d(self):
         device = torch.device("cuda:0")
@@ -181,8 +178,10 @@ class TestLayers(unittest.TestCase):
         # print(y1)
         # print(y2)
 
-        assert np.allclose(y1, y2, rtol=1e-4, atol=1e-4), f"converted result max abs error: {(y1 - y2).abs().max().item()}"
-    
+        assert np.allclose(
+            y1, y2, rtol=1e-4, atol=1e-4
+        ), f"converted result max abs error: {(y1 - y2).abs().max().item()}"
+
     def test_fftonnblocklinear(self):
         device = torch.device("cuda:0")
         layer = FFTONNBlockLinear(
@@ -238,8 +237,10 @@ class TestLayers(unittest.TestCase):
         print(y1)
         print(y2)
 
-        assert torch.allclose(y1, y2, rtol=3e-2, atol=3e-2), f"converted result max abs error:{(y1 - y2).abs().max().item()}"
-    
+        assert torch.allclose(
+            y1, y2, rtol=3e-2, atol=3e-2
+        ), f"converted result max abs error:{(y1 - y2).abs().max().item()}"
+
     def test_tempoblockconv2d(self):
         device = torch.device("cuda:0")
         layer = TeMPOBlockConv2d(
@@ -267,8 +268,9 @@ class TestLayers(unittest.TestCase):
         print(y1)
         print(y2)
 
-        assert torch.allclose(y1, y2, rtol=3e-2, atol=3e-2), f"converted result max abs error:{(y1 - y2).abs().max().item()}"
-        
+        assert torch.allclose(
+            y1, y2, rtol=3e-2, atol=3e-2
+        ), f"converted result max abs error:{(y1 - y2).abs().max().item()}"
 
     # def test_allpassmorrcirculantlinear(self):
     #     device = torch.device("cuda:0")

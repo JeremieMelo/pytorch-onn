@@ -118,7 +118,7 @@ class TeMPOBlockMatMul(ONNBaseMatMul):
     #         *self.get_param_buffer_groups(mode=mode),
     #     )
 
-        # self.pack_weights()
+    # self.pack_weights()
 
     # def get_param_buffer_groups(self, mode: str) -> Tensor:
     #     buffer_groups = {}
@@ -191,7 +191,9 @@ class TeMPOBlockMatMul(ONNBaseMatMul):
         }
 
         ## add input transform
-        self.add_transform("matrix_A", "matrix_A", {"matrix_A_transform": self._matrix_A_transform})
+        self.add_transform(
+            "matrix_A", "matrix_A", {"matrix_A_transform": self._matrix_A_transform}
+        )
 
         ## add weight transform
         if self.mode == "weight":
@@ -205,7 +207,9 @@ class TeMPOBlockMatMul(ONNBaseMatMul):
             "output", "output", {"output_transform": self._output_transform}
         )
 
-    def sync_parameters(self, src: str = "weight", steps: int = 1000, verbose: bool = False) -> None:
+    def sync_parameters(
+        self, src: str = "weight", steps: int = 1000, verbose: bool = False
+    ) -> None:
         """
         description: synchronize all parameters from the source parameters
         """
@@ -267,10 +271,12 @@ class TeMPOBlockMatMul(ONNBaseMatMul):
         self.matrix_A_scale = alpha.item()
 
         if self.matrix_A_noise_std > 0:
-            x = add_gaussian_noise(x, noise_std=self.matrix_A_noise_std * self.matrix_A_scale)
+            x = add_gaussian_noise(
+                x, noise_std=self.matrix_A_noise_std * self.matrix_A_scale
+            )
 
         return x
-    
+
     def _matrix_B_transform(self, x: Tensor) -> Tensor:
         """
         For adding noise to the chip input, weight, and output, the noise is estimated on normalized computing

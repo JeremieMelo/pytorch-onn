@@ -6,15 +6,16 @@ LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-07 03:43:40
 """
 
-from torchonn.op.mzi_op import project_matrix_to_unitary
+from collections import OrderedDict
 from typing import List, Union
 
 import torch
 from torch import Tensor, nn
 from torch.types import Device, _size
+
 from torchonn.layers import MZIBlockConv2d, MZIBlockLinear
 from torchonn.models import ONNBaseModel
-from collections import OrderedDict
+from torchonn.op.mzi_op import project_matrix_to_unitary
 
 __all__ = ["MZI_CLASS_CNN"]
 
@@ -179,7 +180,9 @@ class MZI_CLASS_CNN(ONNBaseModel):
 
         if self.pool_out_size > 0:
             self.pool2d = nn.AdaptiveAvgPool2d(self.pool_out_size)
-            feature_size = self.kernel_list[-1] * self.pool_out_size * self.pool_out_size
+            feature_size = (
+                self.kernel_list[-1] * self.pool_out_size * self.pool_out_size
+            )
         else:
             self.pool2d = None
             img_height, img_width = self.img_height, self.img_width

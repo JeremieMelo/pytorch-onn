@@ -212,7 +212,9 @@ class TeMPOBlockLinear(ONNBaseLinear):
             "output", "output", {"output_transform": self._output_transform}
         )
 
-    def sync_parameters(self, src: str = "weight", steps: int = 1000, verbose: bool = False) -> None:
+    def sync_parameters(
+        self, src: str = "weight", steps: int = 1000, verbose: bool = False
+    ) -> None:
         """
         description: synchronize all parameters from the source parameters
         """
@@ -221,6 +223,7 @@ class TeMPOBlockLinear(ONNBaseLinear):
             target = merge_chunks(self.weight.data.clone())[
                 : self.out_features, : self.in_features
             ]
+
             def build_weight_fn():
                 return self.transform_weight(self.weights)["weight"]
 

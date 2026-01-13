@@ -1,17 +1,11 @@
-'''
-Description: 
+"""
+Description:
 Author: Jiaqi Gu (jiaqigu@asu.edu)
 Date: 2023-10-02 02:57:22
 LastEditors: Jiaqi Gu && jiaqigu@asu.edu
 LastEditTime: 2024-06-12 01:10:29
-'''
 """
-Description: 
-Author: Jiaqi Gu (jiaqigu@asu.edu)
-Date: 2023-10-01 19:10:55
-LastEditors: ScopeX-ASU jiaqigu@asu.edu
-LastEditTime: 2023-10-01 19:23:02
-"""
+
 import logging
 import os
 import sys
@@ -19,11 +13,12 @@ import sys
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
 )
+import functools
+
 import numpy as np
 import torch
 from pyutils.general import TimerCtx
 from torch import Tensor
-import functools
 
 sys.path.pop(0)
 
@@ -31,7 +26,7 @@ __all__ = ["multiport_mmi", "multiport_mmi_with_ps"]
 
 
 @functools.lru_cache(maxsize=8)
-def _multiport_mmi_phase(n_port: int=2, device: torch.device = torch.device("cuda")):
+def _multiport_mmi_phase(n_port: int = 2, device: torch.device = torch.device("cuda")):
     x = torch.arange(1, n_port + 1, device=device, dtype=torch.float)
     x, y = torch.meshgrid(x, x)
     sign = ((-1) ** (x + y)).float()
@@ -39,6 +34,7 @@ def _multiport_mmi_phase(n_port: int=2, device: torch.device = torch.device("cud
         1j * ((x - 0.5) - sign * (y - 0.5)).square().mul(np.pi / (-4 * n_port))
     )
     return x.mul(sign)
+
 
 def multiport_mmi(
     n_port: int = 2,
@@ -54,15 +50,20 @@ def multiport_mmi(
     phases = _multiport_mmi_phase(n_port, device)
     if transmission is None:
         transmission = (1 / n_port) ** 0.5
-    
-    x = phases.mul(transmission) # if transmission is trainable, output will also be trainable.
+
+    x = phases.mul(
+        transmission
+    )  # if transmission is trainable, output will also be trainable.
 
     return x
 
 
 # @torch.jit.script
 def multiport_mmi_with_ps(
-    n_port: int = 2, phases: Tensor=None, ps_loc: str = "before", device: torch.device = torch.device("cuda")
+    n_port: int = 2,
+    phases: Tensor = None,
+    ps_loc: str = "before",
+    device: torch.device = torch.device("cuda"),
 ):
     """N by N mmi with N ps at the input ports. Operation Principles for Optical Switches Based on Two Multimode Interference Couplers, JLT 2012
 
@@ -77,7 +78,7 @@ def multiport_mmi_with_ps(
     # angle = torch.randn(n_port, device=device)
     # ps = torch.exp(1j * angle * np.pi)
     # angle[1::2] += 1
-    
+
     # ps = torch.complex(angle.cos(), angle.sin())
     if phases is not None:
         if ps_loc == "before":

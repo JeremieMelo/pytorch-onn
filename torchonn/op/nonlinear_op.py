@@ -1,9 +1,10 @@
-'''
+"""
 Date: 2024-06-12 10:48:00
 LastEditors: Jiaqi Gu && jiaqigu@asu.edu
 LastEditTime: 2024-06-12 10:48:00
 FilePath: /pytorch-onn/torchonn/op/nonlinear_op.py
-'''
+"""
+
 """
 Date: 2024-06-12 00:51:51
 LastEditors: Jiaqi Gu && jiaqigu@asu.edu

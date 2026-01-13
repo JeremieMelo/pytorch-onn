@@ -1,14 +1,17 @@
 """
-Description: 
+Description:
 Author: Jiaqi Gu (jqgu@utexas.edu)
 Date: 1969-12-31 18:00:00
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2023-06-01 02:00:35
 """
+
 from tabnanny import verbose
-from torchonn.layers.fftonn_linear import FFTONNBlockLinear
+
 import torch
 import torch.fft
+
+from torchonn.layers.fftonn_linear import FFTONNBlockLinear
 
 
 def test():
@@ -25,7 +28,9 @@ def test():
     optimizer = torch.optim.Adam([sigma], lr=1e-3)
     T = 4000
     for i in range(T):
-        loss = torch.nn.functional.mse_loss(torch.view_as_real(B.matmul(sigma.unsqueeze(1) * P)), torch.view_as_real(W))
+        loss = torch.nn.functional.mse_loss(
+            torch.view_as_real(B.matmul(sigma.unsqueeze(1) * P)), torch.view_as_real(W)
+        )
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -38,6 +43,9 @@ def test():
 def test_build_from_layer():
     device = "cuda"
     fc = torch.nn.Linear(8, 8).to(device)
-    layer = FFTONNBlockLinear.from_layer(fc, miniblock=4, mode="trainable", verbose=True)
+    layer = FFTONNBlockLinear.from_layer(
+        fc, miniblock=4, mode="trainable", verbose=True
+    )
+
 
 test_build_from_layer()

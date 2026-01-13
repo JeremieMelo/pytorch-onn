@@ -6,15 +6,11 @@ LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-07-18 00:01:36
 """
 
-from pyutils.compute import (
-    complex_mult,
-    polar_to_complex,
-    polynomial,
-)
 import logging
 
 import numpy as np
 import torch
+from pyutils.compute import complex_mult, polar_to_complex, polynomial
 
 torch._C._jit_set_profiling_executor(False)
 
@@ -77,7 +73,6 @@ def mrr_tr_to_roundtrip_phase(t, a, r):
         return np.arccos(cos_phi), cos_phi
     else:
         raise NotImplementedError
-
 
 
 def mrr_roundtrip_phase_to_tr(

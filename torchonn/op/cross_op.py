@@ -1,10 +1,10 @@
-'''
+"""
 Description: ops for waveguide crossings
 Author: Jiaqi Gu (jqgu@utexas.edu)
 Date: 2022-04-18 21:43:06
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2022-04-18 21:43:06
-'''
+"""
 
 import torch
 from torch import Tensor
@@ -46,11 +46,15 @@ class HardRoundFunction(torch.autograd.Function):
 
 def diff_round(x: Tensor) -> Tensor:
     """Project to closest permutation matrix"""
-    assert x.size(-1) == x.size(-2), f"input x has to be a square matrix, but got {x.size()}"
+    assert x.size(-1) == x.size(
+        -2
+    ), f"input x has to be a square matrix, but got {x.size()}"
     return RoundFunction.apply(x)
 
 
 def hard_diff_round(x: Tensor) -> Tensor:
     """Project to closest permutation matrix"""
-    assert x.size(-1) == x.size(-2), f"input x has to be a square matrix, but got {x.size()}"
+    assert x.size(-1) == x.size(
+        -2
+    ), f"input x has to be a square matrix, but got {x.size()}"
     return HardRoundFunction.apply(x)

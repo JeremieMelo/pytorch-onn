@@ -8,7 +8,6 @@ LastEditTime: 2021-07-18 00:03:05
 
 import numpy as np
 
-
 __all__ = [
     "MORRConfig_20um_MQ",
     "MRRConfig_5um_HQ",

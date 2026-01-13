@@ -1,8 +1,8 @@
 from typing import Tuple
 
+import numpy as np
 import torch
 from torch import Tensor
-import numpy as np
 
 __all__ = ["merge_chunks", "partition_chunks"]
 
@@ -26,7 +26,9 @@ def partition_chunks(x: Tensor, out_shape: int | Tuple[int, ...]) -> Tensor:
     ### out: [h1, w1, h2, w2, ...., hk, wk]
     x_shape = (np.prod(out_shape[::2]), np.prod(out_shape[1::2]))
     if x_shape != x.shape:
-        x = torch.nn.functional.pad(x[None,None], (0, x_shape[1] - x.shape[1], 0, x_shape[0] - x.shape[0]))[0,0]
+        x = torch.nn.functional.pad(
+            x[None, None], (0, x_shape[1] - x.shape[1], 0, x_shape[0] - x.shape[0])
+        )[0, 0]
     in_shape = list(out_shape[::2]) + list(out_shape[1::2])
     x = x.reshape(in_shape)  # [h1, h2, ..., hk, w1, w2, ..., wk]
     x = x.permute(

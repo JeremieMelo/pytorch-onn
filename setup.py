@@ -5,6 +5,7 @@ Date: 2021-06-08 20:49:14
 LastEditors: Jiaqi Gu (jqgu@utexas.edu)
 LastEditTime: 2021-06-08 20:49:14
 """
+
 import os
 from distutils import log
 from distutils.dir_util import remove_tree
@@ -12,7 +13,13 @@ from distutils.dir_util import remove_tree
 import torch
 import torch.cuda
 from setuptools import Command, find_packages, setup
-from torch.utils.cpp_extension import CUDA_HOME, BuildExtension, CppExtension, CUDAExtension
+from torch.utils.cpp_extension import (
+    CUDA_HOME,
+    BuildExtension,
+    CppExtension,
+    CUDAExtension,
+)
+
 from torchonn import __version__
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -46,8 +53,12 @@ class CleanCommand(Command):
         self.set_undefined_options("bdist", ("bdist_base", "bdist_base"))
 
     def run(self):
-        os.system("rm -vrf ./build ./dist ./*.pyc ./*.tgz ./*.egg-info ./*.so ./torchonn/*.egg-info")
-        os.system("rm -vrf ./build ./dist ./*.pyc ./*.tgz ./*.egg-info ./*.so ./torchonn/*.egg-info")
+        os.system(
+            "rm -vrf ./build ./dist ./*.pyc ./*.tgz ./*.egg-info ./*.so ./torchonn/*.egg-info"
+        )
+        os.system(
+            "rm -vrf ./build ./dist ./*.pyc ./*.tgz ./*.egg-info ./*.so ./torchonn/*.egg-info"
+        )
 
 
 tokens = str(torch.__version__).split(".")

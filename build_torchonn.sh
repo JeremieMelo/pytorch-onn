@@ -18,4 +18,3 @@ local_channel="${output_folder}";
 # mamba install -y -c "file://${local_channel}" pytorch==2.3.0 pytorch-cuda=11.8 -c pytorch -c nvidia;
 mamba install -y -n "${VENV}" -c local torchonn
 echo "Finished mamba install";
-

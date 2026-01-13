@@ -18,6 +18,7 @@ from torch import Tensor
 from torch.nn import Parameter, init
 from torch.nn.modules.utils import _pair
 from torch.types import Device, _size
+
 from torchonn.op.pcm_op import (
     weight_quantize_fn_log,
     weight_to_quantized_weight,
@@ -100,7 +101,9 @@ class PCMConv2d(ONNBaseLayer):
         self.padding = _pair(padding)
         self.dilation = _pair(dilation)
         self.groups = groups
-        assert groups == 1, f"Currently group convolution is not supported, but got group: {groups}"
+        assert (
+            groups == 1
+        ), f"Currently group convolution is not supported, but got group: {groups}"
 
         self.w_bit = 32
         self.in_bit = 32
@@ -149,11 +152,16 @@ class PCMConv2d(ONNBaseLayer):
         else:
             raise NotImplementedError
 
-        assign_zero_value = 2 ** self.w_bit - 1
+        assign_zero_value = 2**self.w_bit - 1
 
         if self.assign and (self.w_bit < 16):
             self.assign_converter = weight_to_quantized_weight(
-                self.w_bit, 1 - self.pcm_l, True, self.assign, assign_zero_value, loss_fn
+                self.w_bit,
+                1 - self.pcm_l,
+                True,
+                self.assign,
+                assign_zero_value,
+                loss_fn,
             )
             self.real_assign_converter = weight_to_quantized_weight_cpu(
                 self.w_bit, 1 - self.pcm_l, True, self.assign, assign_zero_value
@@ -175,7 +183,10 @@ class PCMConv2d(ONNBaseLayer):
         if self.mode == "weight":
             self.weight = Parameter(
                 torch.Tensor(
-                    self.out_channels, self.in_channels, self.kernel_size[0], self.kernel_size[1]
+                    self.out_channels,
+                    self.in_channels,
+                    self.kernel_size[0],
+                    self.kernel_size[1],
                 ).to(self.device)
             )
         elif self.mode == "block":
@@ -183,7 +194,11 @@ class PCMConv2d(ONNBaseLayer):
             self.weight = Parameter(
                 torch.Tensor(
                     (self.out_channels + self.block_size - 1) // self.block_size,
-                    (self.in_channels * self.kernel_size[0] * self.kernel_size[1] + self.block_size - 1)
+                    (
+                        self.in_channels * self.kernel_size[0] * self.kernel_size[1]
+                        + self.block_size
+                        - 1
+                    )
                     // self.block_size,
                     self.block_size,
                     self.block_size,
@@ -192,7 +207,10 @@ class PCMConv2d(ONNBaseLayer):
         else:
             self.weight = Parameter(
                 torch.Tensor(
-                    self.out_channels, self.in_channels, self.kernel_size[0], self.kernel_size[1]
+                    self.out_channels,
+                    self.in_channels,
+                    self.kernel_size[0],
+                    self.kernel_size[1],
                 ).to(self.device)
             )
 
@@ -212,7 +230,10 @@ class PCMConv2d(ONNBaseLayer):
             else:
                 weight = self.weight
                 weight = weight.view(
-                    self.out_channels, self.in_channels, self.kernel_size[0], self.kernel_size[1]
+                    self.out_channels,
+                    self.in_channels,
+                    self.kernel_size[0],
+                    self.kernel_size[1],
                 )
         elif self.mode == "block":
             if self.w_bit < 16:
@@ -226,9 +247,15 @@ class PCMConv2d(ONNBaseLayer):
                 weight.permute([0, 2, 1, 3])
                 .contiguous()
                 .view(p * k, q * k)[
-                    : self.out_channels, : self.in_channels * self.kernel_size[0] * self.kernel_size[1]
+                    : self.out_channels,
+                    : self.in_channels * self.kernel_size[0] * self.kernel_size[1],
                 ]
-                .view(self.out_channels, self.in_channels, self.kernel_size[0], self.kernel_size[1])
+                .view(
+                    self.out_channels,
+                    self.in_channels,
+                    self.kernel_size[0],
+                    self.kernel_size[1],
+                )
                 .contiguous()
             )
 
@@ -275,8 +302,12 @@ class PCMConv2d(ONNBaseLayer):
         """
         get the output features size
         """
-        h_out = (img_height - self.kernel_size[0] + 2 * self.padding[0]) / self.stride[0] + 1
-        w_out = (img_width - self.kernel_size[1] + 2 * self.padding[1]) / self.stride[1] + 1
+        h_out = (img_height - self.kernel_size[0] + 2 * self.padding[0]) / self.stride[
+            0
+        ] + 1
+        w_out = (img_width - self.kernel_size[1] + 2 * self.padding[1]) / self.stride[
+            1
+        ] + 1
         return (int(h_out), int(w_out))
 
     def get_difference_loss_global_L1(self, loss_flag: bool) -> Tensor:
@@ -287,14 +318,23 @@ class PCMConv2d(ONNBaseLayer):
         if self.block_mul_flag == True:
             p, q, k, k = self.weight.size()
             weight = self.weight.view(p * q, -1)
-            weight = self.assign_converter(weight)  # transfer weight to transmission levels
-            base = torch.mean(weight, dim=0, keepdim=True).detach()  # get one global reference block
+            weight = self.assign_converter(
+                weight
+            )  # transfer weight to transmission levels
+            base = torch.mean(
+                weight, dim=0, keepdim=True
+            ).detach()  # get one global reference block
             ref = base.repeat(p * q, 1)
 
             if loss_flag:
                 loss = F.l1_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.l1_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.l1_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 self.block_full_differences = tmp.cpu().numpy().tolist()
         else:
             loss = 0
@@ -310,13 +350,20 @@ class PCMConv2d(ONNBaseLayer):
             p, q, k, k = self.weight.size()
             weight = self.weight.view(p * q, -1)
             weight = self.assign_converter(weight)
-            base = torch.mean(weight, dim=0, keepdim=True).detach()  # get one global reference block
+            base = torch.mean(
+                weight, dim=0, keepdim=True
+            ).detach()  # get one global reference block
             ref = base.repeat(p * q, 1)
 
             if loss_flag:
                 loss = F.mse_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.mse_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.mse_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 self.block_full_differences_real = tmp.cpu().numpy().tolist()
         else:
             loss = 0
@@ -346,11 +393,18 @@ class PCMConv2d(ONNBaseLayer):
             if loss_flag:
                 loss = F.l1_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.l1_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.l1_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.block_avr_differences_row = []
                 for i in range(p):
-                    self.block_avr_differences_row.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.block_avr_differences_row.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 
@@ -377,11 +431,18 @@ class PCMConv2d(ONNBaseLayer):
             if loss_flag:
                 loss = F.mse_loss(weight, ref, reduction="mean")
             else:
-                tmp = F.mse_loss(weight, ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.mse_loss(weight, ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.block_avr_differences_row_real = []
                 for i in range(p):
-                    self.block_avr_differences_row_real.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.block_avr_differences_row_real.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 
@@ -403,7 +464,9 @@ class PCMConv2d(ONNBaseLayer):
             weight_ref = weight.detach().clone()
 
             for i in range(p):
-                base = torch.mean(weight[i * q : i * q + q], dim=0, keepdim=True).detach()
+                base = torch.mean(
+                    weight[i * q : i * q + q], dim=0, keepdim=True
+                ).detach()
                 indices[i * q] = p * q + i
                 weight_ref = torch.cat((weight_ref, base), 0)
 
@@ -412,11 +475,18 @@ class PCMConv2d(ONNBaseLayer):
             if loss_flag:
                 loss = F.mse_loss(weight, weight_ref, reduction="mean")
             else:
-                tmp = F.mse_loss(weight, weight_ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.mse_loss(weight, weight_ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.block_avr_differences_row_real = []
                 for i in range(p):
-                    self.block_avr_differences_row_real.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.block_avr_differences_row_real.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 
@@ -447,11 +517,18 @@ class PCMConv2d(ONNBaseLayer):
             if loss_flag:
                 loss = F.l1_loss(weight, weight_ref, reduction="mean")
             else:
-                tmp = F.l1_loss(weight, weight_ref, reduction="none").detach().sum(dim=1).div(k * k)
+                tmp = (
+                    F.l1_loss(weight, weight_ref, reduction="none")
+                    .detach()
+                    .sum(dim=1)
+                    .div(k * k)
+                )
                 tmp_chunk = torch.chunk(tmp, p, dim=0)
                 self.programming_levels_avr_row_real = []
                 for i in range(p):
-                    self.programming_levels_avr_row_real.append(tmp_chunk[i].cpu().numpy().tolist())
+                    self.programming_levels_avr_row_real.append(
+                        tmp_chunk[i].cpu().numpy().tolist()
+                    )
         else:
             loss = 0
 

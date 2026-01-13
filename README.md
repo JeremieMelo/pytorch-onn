@@ -15,7 +15,7 @@
 <h3><p align="center">Fast, Scalable, Easy Customization, Support Hardware-Aware Cross-Layer Co-Design</p></h3>
 
 <p align="center">
-    <a href="https://github.com/JeremieMelo/pytorch-onn/blob/release/LICENSEE">
+    <a href="https://github.com/JeremieMelo/pytorch-onn/blob/main/LICENSE">
         <img alt="MIT License" src="https://img.shields.io/apm/l/atomic-design-ui.svg?">
     </a>
 </p>

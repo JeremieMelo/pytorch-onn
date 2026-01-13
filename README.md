@@ -16,10 +16,11 @@
 
 <p align="center">
     <a href="https://github.com/JeremieMelo/pytorch-onn/blob/main/LICENSE">
-        <img alt="MIT License" src="https://img.shields.io/apm/l/atomic-design-ui.svg?">
+        <img alt="License" src="https://img.shields.io/github/license/JeremieMelo/pytorch-onn">
     </a>
 </p>
 <br />
+
 
 # 👋 Welcome
 
